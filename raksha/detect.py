@@ -116,6 +116,7 @@ _DEV_REL = "बेटी|बेटा|पुत्र|पुत्री|भा�
 _DEV_AFTER_REL = _tc(rf"(?<![\w\p{{M}}])(?:{_DEV_REL})\s*[-:–]?\s*({_DEVSEQ})")
 _DEV_BEFORE_REL = _tc(rf"(?<![\w\p{{M}}])({_DEVSEQ})\s+(?:की|का|के)\s+(?:{_DEV_REL})(?![\w\p{{M}}])")
 _DEV_PT = _tc(rf"(?<![\w\p{{M}}])(?:रोगी|मरीज़?|पेशेंट|अटेंडेंट|परिजन|देखभालकर्ता)\s*(?:का\s*नाम)?\s*[:\-–]\s*({_DEVSEQ})")
+_ORG_CUE = _tc(rf"(?i)(?<![\w])(?:employer|company|workplace|works?\s+(?:at|for)|employed\s+(?:at|by)|studies\s+at|studying\s+at|college|school|university)\s*[:\-]?\s*({SEQ_TITLE})")
 _NEXTWORD = _tc(r"[ \t]+(\p{L}+)")
 _MEDICAL_ONLY = lex.LABS | lex.DRUGS | lex.DISEASES | lex.UNITS | lex.DOSAGE_FORMS | lex.ANATOMY | lex.PROCEDURES | lex.ABBREV
 _GAON = _tc(r"(?<![\w\p{M}])(\p{Lu}[\p{L}]{2,}(?:\s+\p{Lu}[\p{L}]{2,})?)\s+(?i:gaon|gaanv|gram|village|vill\.?)(?![\w\p{M}])")
@@ -456,6 +457,9 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
         add_name(m.start(1), m.end(1), "relative" if rel else "patient", True, 3)
     for m in _WEAK_LABEL.finditer(text):
         add_name(m.start(1), m.end(1), "patient", False, 4)
+    for m in _ORG_CUE.finditer(text):            # employer / college names single out a person
+        s0, e0 = _trim_seq(text, m.start(1), m.end(1), False)
+        add(s0, e0, "NAME", "other", 5)
     for m in _OTHER_LABEL.finditer(text):
         add_name(m.start(1), m.end(1), "other", False, 4)
     for m in _RELATION.finditer(text):

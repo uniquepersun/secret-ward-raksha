@@ -45,6 +45,7 @@ CASES = [
  ("Patient 50/F seen today", [], ["50/F"]),
  ("Lotus Care Hospital reviewed the case", [], ["Lotus Care Hospital"]),
  ("write x at gmail dot com", ["x at gmail dot com"], []),
+ ("Employer: Tata Motors Pune; college: Fergusson College", ["Tata Motors", "Fergusson College"], []),
  ("Insurance PMJAY-UP-5521908834 policy POL/21/99887766 claim BL/26/00123", ["5521908834", "99887766", "BL/26/00123"], []),
 ]
 

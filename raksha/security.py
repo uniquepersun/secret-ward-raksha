@@ -91,7 +91,7 @@ def _mostly_text(raw: bytes) -> bool:
     return sum(c.isprintable() or c in "\r\n\t" for c in t) / len(t) >= 0.95
 
 
-_FORMULA = re.compile(r"^\s*(?:[=@]|[+\-]\s*(?:cmd|powershell|msexcel|hyperlink|dde|exec)\b)", re.I)
+_FORMULA = re.compile(r"^\s*(?:[=@]|[+\-]\s*(?:cmd|powershell|msexcel|hyperlink|dde|exec)\b|[+\-]\s*\d+(?:\.\d+)?\s*[+\-*/]\s*[\d(]|[+\-]\s*\w+\s*\()", re.I)
 
 
 def neutralise_cell(v: str) -> str:
