@@ -46,12 +46,19 @@ CASES = [
  ("Lotus Care Hospital reviewed the case", [], ["Lotus Care Hospital"]),
  ("write x at gmail dot com", ["x at gmail dot com"], []),
  ("Employer: Tata Motors Pune; college: Fergusson College", ["Tata Motors", "Fergusson College"], []),
+ ("mareez ka mobile: nau chaar ek paanch ek do teen char paanch saat", ["nau chaar ek paanch ek do teen char paanch saat"], ["mareez ka mobile"]),
+ ("पता: गली 4, अलीगंज, लखनऊ", ["गली 4", "अलीगंज"], []),
+ ("resident of lane 4 sector-B, Aliganj, Lucknow", ["lane 4 sector-B", "Aliganj"], []),
+ ("Address: House 180, Mohalla Ganesh, Tehsil Misrikh, Distt. Sitapur", ["House 180"], ["Tehsil Misrikh", "Distt. Sitapur"]),
+ ("सुनीता यादव, पति रमेश यादव", ["सुनीता यादव"], []),
+ ("रोगी (45 वर्ष) को बुखार", ["(45 वर्ष)"], ["बुखार"]),
+ ("Shri Balaji Clinic reviewed the case", [], ["Shri Balaji Clinic"]),
  ("Insurance PMJAY-UP-5521908834 policy POL/21/99887766 claim BL/26/00123", ["5521908834", "99887766", "BL/26/00123"], []),
 ]
 
 def main():
     lx = Lexicon()
-    lx.add_name("Shahid Khan"); lx.add_name("Kishorilal Bhandari")      # lowercase "shahid sahab" must still be caught once the name is known
+    lx.add_name("Shahid Khan"); lx.add_name("सुनीता"); lx.add_name("Kishorilal Bhandari")      # lowercase "shahid sahab" must still be caught once the name is known
     bad = 0
     for text, gone, stay in CASES:
         out, pos = [], 0
@@ -60,7 +67,9 @@ def main():
             pos = s.end
         res = "".join(out) + text[pos:]
         from raksha.privacy import shift_text_dates
+        from raksha.privacy import band_ages_in_text
         res, _ = shift_text_dates(res, 37, "dmy")
+        res, _ = band_ages_in_text(res)
         miss = [g for g in gone if g in res]
         lost = [k for k in stay if k not in res]
         if miss or lost:

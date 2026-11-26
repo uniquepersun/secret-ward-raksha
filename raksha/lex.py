@@ -128,7 +128,7 @@ bukhar khansi dard pet sar sir bahut thoda zyada kam theek thik achha accha bura
 ek do teen char paanch panch chhe saat aath nau das ghar yahan wahan idhar udhar kyun kyu kaise kaisa
 kaun kab kitna kitne kitni paani pani khana khaana neend nind sona so ulti dast tatti peshab
 """)
-HOSPITAL_WORDS = _w("""
+HOSPITAL_WORDS = _w("""dispensary home chemist pharmacy medicals polyclinic hospitals 
 hospital hospitals multispeciality multispecialty speciality specialty charitable seva sadan sanjeevani jeevan
 jyoti arogya district medical college institute centre center clinic nursing home diagnostics diagnostic
 pathology laboratory lab labs lifeline pathkind city sadar community health primary phc chc cghs esi pmjay

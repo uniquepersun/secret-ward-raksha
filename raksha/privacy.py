@@ -205,6 +205,8 @@ def band(age: int) -> str:
 
 _AGE_UNIT = r"(?:years?|yrs?\.?|y\b|वर्ष|साल|baras)"
 _AGE_PATTERNS = [
+    rx.compile(r"(?<=\()()(\d{1,3})(?=\s*(?:वर्ष|साल|yrs?|years?)\s*\))"),
+    rx.compile(r"(?<![\d.:/\-x×])()(\d{1,3})(?=\s*(?:वर्ष|साल)\s*(?:की|का|के)\b)"),
     # Age: 47 [Yrs]   Age/Sex: 46 Yrs/M   आयु: 39 वर्ष
     rx.compile(r"(?i)((?:\bage(?:\s*/\s*sex)?|आयु|उम्र|umar|\bumr)\s*[:\-=]?\s*)(\d{1,3})(?![\d/]\d)(?!\s*(?:mg|ml|g|%|/\d))"),
     # 48 Y / F, 46 Yrs/M, 47 yrs female, 52 वर्ष महिला

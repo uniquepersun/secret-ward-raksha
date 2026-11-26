@@ -357,7 +357,7 @@ class Pipeline:
             self.json_roles[sig] = infer_role(sig, vs, known or None)
 
     # =========================================================================== place columns
-    ADDR_SIBLINGS = {"PIN", "ADDRESS", "TEHSIL", "DISTRICT"}
+    ADDR_SIBLINGS = {"PIN", "ADDRESS", "ADDRESSH", "TEHSIL", "DISTRICT"}
 
     def _place_like(self, vals: list) -> str | None:
         """'VILLAGE' / 'KEEP' for an unlabelled name-shaped column inside an address block."""
@@ -424,13 +424,13 @@ class Pipeline:
                 continue
             if d.kind == "csv":
                 for j, r in enumerate(d.roles):
-                    if r in ("TEXT", "ADDRESS"):
+                    if r in ("TEXT", "ADDRESS", "ADDRESSH"):
                         for row in d.rows:
                             if j < len(row):
                                 self._learn_text(row[j])
             elif d.kind == "json":
                 for parts, key, v in self._iter_json(d.data):
-                    if isinstance(v, str) and (" " in v) and self.json_roles.get(sig_join(parts)) in ("TEXT", "ADDRESS", "KEEP"):
+                    if isinstance(v, str) and (" " in v) and self.json_roles.get(sig_join(parts)) in ("TEXT", "ADDRESS", "ADDRESSH", "KEEP"):
                         self._learn_text(v)
         # document frequency of Title-Case sequences (hospital names, headings) for the last-resort name heuristic
         seqdf = Counter()
@@ -596,7 +596,7 @@ class Pipeline:
                     row = d.rows[u.node]
                     pairs = [(d.roles[j], row[j]) for j in range(min(len(row), len(d.roles)))]
                     u.ev = self._ev_from_pairs(pairs, order, d.rel)
-                    self._ev_from_text(u.ev, " ".join(row[j] for j in range(len(row)) if j < len(d.roles) and d.roles[j] in ("TEXT", "ADDRESS")), skip_names=True)
+                    self._ev_from_text(u.ev, " ".join(row[j] for j in range(len(row)) if j < len(d.roles) and d.roles[j] in ("TEXT", "ADDRESS", "ADDRESSH")), skip_names=True)
             elif d.kind == "json":
                 for u in d.units:
                     pairs, texts, groups = [], [], defaultdict(list)
@@ -607,7 +607,7 @@ class Pipeline:
                             groups[(role, parts[:-1])].append(sv)
                         else:
                             pairs.append((role, sv))
-                        if isinstance(v, str) and role in ("TEXT", "ADDRESS", "KEEP") and " " in v:
+                        if isinstance(v, str) and role in ("TEXT", "ADDRESS", "ADDRESSH", "KEEP") and " " in v:
                             texts.append(v)
                     ev = self._ev_from_pairs(pairs, order, d.rel)
                     texts += self._kv_texts(u.node)
@@ -824,11 +824,14 @@ class Pipeline:
             key, first = keys[r]
             if count[key] > 1:
                 key = f"{key}#{first}"
+            skey = key
+            if key == first and names:               # no id: one person's rows share a shift through their name
+                skey = "nm:" + "|".join(sorted(max(names, key=len)))
             skels = frozenset(s for nm in names for s in nm if s not in self.lx.generic_skels) or frozenset(s for nm in names for s in nm)
             # records that carry a phone / id fragment but no patient identity still get their dates shifted
             weak = any(evs[i].phones or evs[i].cores for i in idx)
             self.cl_info[r] = {"key": key, "ident": ident, "psn": privacy.pseudonym(key) if ident else None,
-                               "shift": privacy.shift_days(key, self.age_max, self.age_min) if (ident or weak) else None,
+                               "shift": privacy.shift_days(skey, self.age_max, self.age_min) if (ident or weak) else None,
                                "skels": skels, "ids": frozenset(ids), "cores": frozenset(cores), "n": len(idx), "names": tuple(set(names))}
             codes = set()
             for i in idx:
@@ -1064,8 +1067,7 @@ class Pipeline:
             return sv
         if role == "NUM" and re.fullmatch(r"[\d.,\s\-]+", sv):
             return sv
-        hint = ""
-        return self.scrub_text(sv, ctx, hint)
+        return self.scrub_text(sv, ctx, "address" if role == "ADDRESSH" else "")
 
     # ----------------------------------------------------------------------- csv / text / json writers
     def render_csv(self, d: DocState) -> str:

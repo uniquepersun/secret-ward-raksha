@@ -137,6 +137,8 @@ def infer_role(header: str, values: list, known_names=None) -> str:
         return "SEX"
     if HDR_PIN.search(h) and _share(dv, lambda v: bool(re.match(r"^\d{3,6}", v))) >= 0.5:
         return "PIN"
+    if re.search(r"address|addr\b|\bpata\b|residence|पता|निवास", h, re.I) and not HDR_NONPERSON.search(h):
+        return "ADDRESSH"          # the HEADER says address (content-typed ADDRESS is only a guess: "C/O pain" looks like one)
     long_share = _share(sv, lambda v: len(v) > 45 or v.count(" ") >= 5)
     if _share(sv, lambda v: bool(_ADDR_V.search(v))) >= 0.3 or (HDR_ADDRESS.search(h) and long_share >= 0.3):
         return "ADDRESS"

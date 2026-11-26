@@ -87,7 +87,8 @@ _PHONE_CUE = _tc(r"(?i)(?:mob(?:ile)?|ph(?:one)?|tel|contact|cell|call|whatsapp|
 _SPLIT_PHONE = _tc(r"(?<![\d])[6-9]\d{4}[ \t]*\r?\n[ \t]*\d{5}(?![\d])")
 _DW_EN = r"(?:zero|one|two|three|four|five|six|seven|eight|nine|oh)"
 _DW_HI = r"(?:शून्य|एक|दो|तीन|चार|पांच|पाँच|छह|छः|सात|आठ|नौ)"
-_DIGIT_WORDS = _tc(rf"(?i)(?<![\w\p{{M}}])(?:{_DW_EN}(?:[ ,\-]+{_DW_EN}){{9,13}}|{_DW_HI}(?:[ ,\-]+{_DW_HI}){{9,13}})(?![\w\p{{M}}])")
+_DW_RO = r"(?:shunya|sifar|ek|do|teen|char|chaar|paanch|panch|chhe|chheh|chhah|saat|aath|nau)"
+_DIGIT_WORDS = _tc(rf"(?i)(?<![\w\p{{M}}])(?:{_DW_EN}(?:[ ,\-]+{_DW_EN}){{9,13}}|{_DW_HI}(?:[ ,\-]+{_DW_HI}){{9,13}}|{_DW_RO}(?:[ ,\-]+{_DW_RO}){{9,13}})(?![\w\p{{M}}])")
 _SPACED = _tc(r"(?<![\w])(?:\p{L}[ .\-_]){4,}\p{L}(?![\w])")
 _CUE_THEN_WORD = _tc(r"(?i:\b(?:said|says|told|informed|named|called|neighbou?r|friend|brother|sister|uncle|aunt|cousin|nephew|niece|colleague|boss|landlord|driver|maid)\s+)(\p{Lu}\p{Ll}{3,})(?![\p{L}\p{M}])")
 _UUID = _tc(r"(?i)(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])")
@@ -117,6 +118,9 @@ _DEV_AFTER_REL = _tc(rf"(?<![\w\p{{M}}])(?:{_DEV_REL})\s*[-:–]?\s*({_DEVSEQ})"
 _DEV_BEFORE_REL = _tc(rf"(?<![\w\p{{M}}])({_DEVSEQ})\s+(?:की|का|के)\s+(?:{_DEV_REL})(?![\w\p{{M}}])")
 _DEV_PT = _tc(rf"(?<![\w\p{{M}}])(?:रोगी|मरीज़?|पेशेंट|अटेंडेंट|परिजन|देखभालकर्ता)\s*(?:का\s*नाम)?\s*[:\-–]\s*({_DEVSEQ})")
 _ORG_CUE = _tc(rf"(?i)(?<![\w])(?:employer|company|workplace|works?\s+(?:at|for)|employed\s+(?:at|by)|studies\s+at|studying\s+at|college|school|university)\s*[:\-]?\s*({SEQ_TITLE})")
+_ADDR_LABEL = _tc(r"(?i)(?<![\w\p{M}])(?:address|resident\s+of|residing\s+at|resides\s+at|r/o|पता|निवास|पते)\s*(?:\([^)\n]{0,30}\))?\s*[:\-–]?\s*([^\n]{3,160})")
+_KEEP_SEG = _tc(r"(?i)^\s*(?:tehsil|tahsil|distt?\.?|district|dist\.?|zila|जिला|तहसील)\b|\[")
+_DEV_SURNAMES = frozenset("यादव शर्मा वर्मा गुप्ता सिंह कुमार मिश्रा पांडे पाण्डेय तिवारी चौहान पटेल खान अंसारी सिद्दीकी राजपूत निषाद पासवान कुशवाहा मौर्य ठाकुर जैन अग्रवाल श्रीवास्तव दुबे शुक्ला त्रिपाठी बानो खातून देवी कौर बेगम".split())
 _NEXTWORD = _tc(r"[ \t]+(\p{L}+)")
 _MEDICAL_ONLY = lex.LABS | lex.DRUGS | lex.DISEASES | lex.UNITS | lex.DOSAGE_FORMS | lex.ANATOMY | lex.PROCEDURES | lex.ABBREV
 _GAON = _tc(r"(?<![\w\p{M}])(\p{Lu}[\p{L}]{2,}(?:\s+\p{Lu}[\p{L}]{2,})?)\s+(?i:gaon|gaanv|gram|village|vill\.?)(?![\w\p{M}])")
@@ -433,6 +437,19 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
     for m in _PIN.finditer(v):
         g = 1 if m.group(1) else 2
         add(m.start(g), m.end(g), "PIN", "PIN", 3)
+    def addr_segments(value: str, base: int):
+        off = 0
+        for seg in value.split(","):
+            t = seg.strip(" \t-–")
+            if len(t) >= 3 and not _KEEP_SEG.search(seg) and t.casefold() not in lx.places and any(c.isalnum() for c in t):
+                a = base + off + (len(seg) - len(seg.lstrip()))
+                add(a, a + len(seg.strip()), "ADDR", "ADDRESS", 4)
+            off += len(seg) + 1
+
+    for m in _ADDR_LABEL.finditer(text):         # address segments other than district / tehsil / placeholders leak house, lane, locality
+        addr_segments(m.group(1), m.start(1))
+    if hint == "address":                        # a cell already typed as an address (FHIR address.line, "Ghar ka Pata")
+        addr_segments(text, 0)
     for m in _GAON.finditer(text):               # "Rampur gaon"
         if not lex.known_nonname(m.group(1).split()[0]):
             add(m.start(1), m.end(1), "VILLAGE", "VILLAGE", 4)
@@ -448,6 +465,9 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
         if e <= s or _is_doctor_context(text, s):
             return
         s2, e2 = _trim_seq(text, s, e, strong)
+        nxt = _NEXTWORD.match(text[e2:e2 + 24]) if e2 > s2 else None
+        if nxt and role != "relative" and nxt.group(1).casefold() in lex.HOSPITAL_WORDS:
+            return                                     # "Shri Balaji Clinic": an organisation, not a person
         if e2 > s2:
             add(s2, e2, "NAME", role, prio)
 
@@ -528,6 +548,8 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
                     hit = lx.name_skels[sk]
         if hit and not _is_doctor_context(text, m.start()):
             add(m.start(), end, "NAME", hit, 6)
+            if deva and ti + 1 < len(toks_all) and toks_all[ti + 1].group(0) in _DEV_SURNAMES and text[end:toks_all[ti + 1].start()].strip() == "":
+                add(toks_all[ti + 1].start(), toks_all[ti + 1].end(), "NAME", hit, 6)
     # letter-spaced words ("K i s h o r i l a l"): collapse, then test as a name token or two
     if loose:
         for m in _SPACED.finditer(text):
