@@ -33,6 +33,7 @@ _LABELLED_ID = rx.compile(r"(?i)(?<![A-Za-z])(?:uhid|mrn|ipd(?:\s*no)?|opd(?:\s*
                           r"आधार|यूएचआईडी|पंजीकरण)[\s_]*(?:no\.?|number|id|संख्या|नंबर)?[\s:#.\-=]*([A-Za-z]{0,6}[\-/]?\d[\dA-Za-z/\-]{3,})")
 _DIGITS_AFTER_NAME = rx.compile(r"(?<=[A-Za-z\u0900-\u097F_])_(\d{4,})(?!\d)")
 _MEDCODE = rx.compile(r"^(?:[A-Z]\d{2}(?:\.\d+)?|\d{3,5}-\d|[A-Z]{1,3}\d{2,3}[A-Z]?)$")  # ICD / LOINC / package codes
+_PHONE_CUE = rx.compile(r"(?i)(?:mob(?:ile)?|ph(?:one)?|tel|contact|cell|call|whatsapp|no\.?)\s*[:.\-]?\s*$")
 _URL = rx.compile(r"(?i)\b(?:https?://|www\.)[^\s\"'<>)\]]+|(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])")  # URLs and UUIDs are never PII
 _DATEISH = rx.compile(r"^\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4}$")
 
@@ -84,14 +85,18 @@ _HINDI_PARTICLE = rx.compile(rf"(?<![\w\p{{M}}])([\u0900-\u097F\p{{M}}]+(?:\s+[\
 _TOKEN = rx.compile(rf"{TOK}")
 
 
-def _valid_run(raw: str, digits: str, groups: list) -> bool:
+def _valid_run(raw: str, digits: str, groups: list, ctx_before: str = "") -> bool:
     """Reject numeric ranges (150000-410000) and over-long runs; accept phone / Aadhaar / ABHA groupings."""
     n = len(digits)
     if n < 8 or n > 14:
         return False
     plus = raw.lstrip().startswith("+")
     if n == 10:
-        return digits[0] in "6789" or (len(groups) == 1 and not plus and False)
+        if digits[0] in "6789":
+            return True
+        # not a valid mobile start (landline / unusual / canary): still an id when grouped like a phone or cued
+        grouped = len(groups) >= 2 and "-" not in raw.strip("-")
+        return grouped or plus or bool(_PHONE_CUE.search(ctx_before))
     if n == 11:
         return digits[0] == "0"          # 0 + mobile, or STD code + landline
     if n == 12:
@@ -250,7 +255,7 @@ def find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> li
     for m in _RUN.finditer(v):
         digits = re.sub(r"\D", "", m.group(0))
         groups = re.findall(r"\d+", m.group(0))
-        if not _valid_run(m.group(0), digits, groups):
+        if not _valid_run(m.group(0), digits, groups, v[max(0, m.start() - 16):m.start()]):
             continue
         if len(digits) >= 10 or (len(digits) >= 8 and m.group(0).lstrip().startswith("+")):
             if _DATEISH.match(m.group(0).strip()):

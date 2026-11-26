@@ -81,13 +81,25 @@ def main():
     idmap = {"SNJ": "SWH", "JJH": "JJC", "UHID": "MRNO", "ADM": "ADT", "DHH": "DHD", "IPD": "IPN", "PMJAY": "PMJ"}
     id_rx = re.compile(r"(?<![A-Za-z])(" + "|".join(idmap) + r")(?=[-/\d])")
 
+    # ---- identifier digits: a per-seed digit permutation inside id surfaces (distinct people per seed)
+    perm = list("0123456789")
+    rnd.shuffle(perm)
+    dperm = str.maketrans("0123456789", "".join(perm))
+    idsurf = {}
+    for f in t["files"].values():
+        for u in f["units"].values():
+            for e in u["entities"]:
+                if e["type"] in ("AADHAAR", "ABHA_NUMBER", "MRN", "PAN", "INSURANCE_ID", "AADHAAR_MASKED") and len(e["surface"]) >= 5:
+                    idsurf.setdefault(e["surface"], e["surface"].translate(dperm))
+    idsurf_items = sorted(idsurf.items(), key=lambda kv: -len(kv[0]))
+
     # ---- phone mapping from truth surfaces (exact string -> new format)
     phones = {}
     for f in t["files"].values():
         for u in f["units"].values():
             for e in u["entities"]:
                 if e["type"] == "PHONE":
-                    d = re.sub(r"\D", "", e["surface"])[-10:]
+                    d = re.sub(r"\D", "", e["surface"])[-10:].translate(dperm)
                     if len(d) == 10 and e["surface"] not in phones:
                         fmt = rnd.choice([f"{d[:5]} {d[5:]}", f"+91-{d}", f"0{d[:5]}-{d[5:]}", f"({d[:5]}) {d[5:]}", d, f"+91 {d[:5]} {d[5:]}"])
                         phones[e["surface"]] = fmt
@@ -107,11 +119,14 @@ def main():
     def mutate_text(s, deva_safe=True):
         if a.hard:
             s = hard(s)
+        for old, new_ in idsurf_items:          # ids first (original surfaces), then prefixes / names / phones
+            if old in s:
+                s = s.replace(old, new_)
         s = name_rx.sub(lambda m: case_like(m.group(1), nmap[m.group(1).lower()]), s)
         s = id_rx.sub(lambda m: idmap[m.group(1)], s)
-        for old, new in phone_items:
+        for old, new_ in phone_items:
             if old in s:
-                s = s.replace(old, new)
+                s = s.replace(old, new_)
         return s
 
     def hdr_new(h):
