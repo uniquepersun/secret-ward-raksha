@@ -10,7 +10,7 @@ FILES = {
     "scalars.json": b"[1,2,3]", "weird.json": b'{"a": NaN, "big": 123456789012345678901234567890, "u": "\\u0930\\u093e\\u092e"}',
     "crlf.txt": b"Name: Ramesh Gupta\r\nMobile: 9876543210\r\n", "bom.txt": b"\xef\xbb\xbfName: Seema Rao, 42 yrs F\n",
     "nul.txt": b"x\x00y\x00z", "random.json": os.urandom(2000), "nested.json": b'{"a":{"b":{"c":[{"name":"Kiran Shah","phone":9876501234}]}}}',
-    "long_token.txt": b"Name: Test Person " + b"x" * 400_000 + b" 9876543210", "photo.jpg": b"\xff\xd8\xff\xe0" + os.urandom(500),
+    "long_token.txt": b"Name: Mohit Arora " + b"x" * 400_000 + b" 9876543210", "photo.jpg": b"\xff\xd8\xff\xe0" + os.urandom(500),
     "doc.pdf": b"%PDF-1.4 " + os.urandom(300), "odd name (2) \xc3\xbc.txt": b"Name: Bina Roy\n",
 }
 
@@ -32,11 +32,9 @@ class Robustness(unittest.TestCase):
             for e in rep["files"]:
                 self.assertIn(e["status"], ("sanitized", "quarantined"))
             blob = "".join(p.read_text(encoding="utf-8", errors="ignore") for p in (out / "sanitized").rglob("*") if p.is_file())
-            for secret in ("Ramesh Gupta", "9876543210", "Seema Rao", "Kiran Shah", "9876501234", "Bina Roy", "Test Person"):
+            for secret in ("Ramesh Gupta", "9876543210", "Seema Rao", "Kiran Shah", "9876501234", "Bina Roy", "Mohit Arora"):
                 self.assertNotIn(secret, blob)
             self.assertFalse(any(p.suffix in (".jpg", ".pdf") for p in (out / "sanitized").rglob("*")))   # binaries never copied
-            self.assertNotIn("t", r.stdout.replace("files", "").replace("sanitized", "").replace("quarantined", "")
-                             .replace("records", "").replace("linked", "").strip().split()[0:0] or "")
 
 
 if __name__ == "__main__":
