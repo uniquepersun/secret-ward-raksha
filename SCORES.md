@@ -14,6 +14,10 @@ precision / recall / F0.5 (wrong merges), reid = simulated share of patients re-
 | 6 | FHIR: URLs / UUIDs protected, `uid` label anchored, loose rare-pair name rule | leak 0.0, FHIR 19/19 valid | leak 0.0 | token retention 92.8 % -> 98.5 % |
 | 7 | encounter ids, caller roles, key scrubbing, patient-role identity | leak 0.0, medical 100, link F0.5 0.98 | hard tier: leak 0.0, link F0.5 0.97 | no pseudonyms for trip / ticket / caller records |
 
+| 8 | scale / stress: 5 mutated copies (240 patients, 1,000 files) | leak 0.0, medical 100, 23 s / 95 MB | | clones across copies (same name, age, village) legitimately merge, so precision is capped by the harness |
+| 9 | fuzzing: empty, binary, NUL, CRLF, BOM, 1,500-deep, 5 MB single line | exit 0, valid contract | | found a crash (text-first run), two quadratic regexes; added guards and a time budget |
+| 10 | index docs cannot bridge; unique pseudonym per cluster; age veto 4 y | link P1.00/R0.91/F0.5 0.99 (0) | hard tier: P1.00/R0.84/F0.5 0.96 (0) | `patient_index.json` listed many patients' ids and merged two clusters; a vetoed merge left two clusters with one id and thus one pseudonym |
+
 Privacy policy grid (attacker_sim, practice data; raw: reid 0.98, record linkage 0.58):
 
 | band | tehsil | PIN | record linkage | patients re-identified |
@@ -28,5 +32,5 @@ Chosen: 10-year bands, tehsil and PIN dropped, `75+` top-code. By the published 
 20 points while privacy is 25 points (credited in full while utility stays above 0.40), so coarser is better; 10 years is the
 compromise that stays informative.
 
-Reliability: 3 runs with the same secret are byte-identical; a different secret changes 0 / 59 pseudonyms' worth of overlap and
+Reliability: 3 runs with the same secret are byte-identical; a different secret shares 0 of 59 pseudonyms and changes
 every sanitized file; input folder hash unchanged; 4.5 s / 41 MB on practice, 46.7 s / 149 MB on 10x (2,000 files).

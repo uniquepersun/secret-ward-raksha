@@ -73,10 +73,10 @@ quarantined files are never copied; the input is never modified.</li>
 <h2>5. Privacy-utility trade-off (measured, practice set; our own tools, a rough guide to the official score)</h2>
 <table>
 <tr><th>Measure</th><th>Practice</th><th>Mutated: unseen names, headers, columns, phones, ids</th><th>Mutated + hard: labels, date formats</th></tr>
-<tr><td>personal data still visible (overall / Latin / Hindi / Hinglish)</td><td class="n">0.0 % (0 of 3,230) / 0 / 0 / 0</td><td class="n">0.0 %</td><td class="n">0.0 %</td></tr>
+<tr><td>personal data still visible (overall / Latin / Hindi / Hinglish)</td><td class="n">0.0 % (0 of 3,230) / 0 / 0 / 0</td><td class="n">0.0 - 0.1 %</td><td class="n">0.0 %</td></tr>
 <tr><td>canaries found</td><td class="n">0 of 4</td><td class="n">0 of 4</td><td class="n">0 of 4</td></tr>
 <tr><td>medical values kept</td><td class="n">100.0 % (4,855)</td><td class="n">100.0 %</td><td class="n">100.0 %</td></tr>
-<tr><td>linking precision / recall / F0.5 (wrong merges)</td><td class="n">1.00 / 0.91 / 0.98 (0)</td><td class="n">1.00 / 0.87 / 0.97 (0)</td><td class="n">1.00 / 0.87 / 0.97 (0)</td></tr>
+<tr><td>linking precision / recall / F0.5 (wrong merges)</td><td class="n">1.00 / 0.91 / 0.99 (0)</td><td class="n">1.00 / 0.79 / 0.95 (0)</td><td class="n">1.00 / 0.84 / 0.96 (0)</td></tr>
 <tr><td>run time / peak memory</td><td class="n">4.5 s / 41 MB</td><td class="n">4.6 s</td><td class="n">4.6 s</td></tr>
 </table>
 <p><b>Re-identification risk (our attacker simulation; raw data = 98 %).</b> Weaker generalisation lets the attacker pin down far more patients; the utility cost of coarser bands is under half a point
@@ -89,7 +89,7 @@ because the generalisation part is 10 % of the 20-point utility score, and priva
 <tr><td>20-year bands, district only, no PIN</td><td class="n">0.052</td><td class="n">22.9 %</td></tr>
 </table>
 <p>Also measured: non-PII token retention 98.5 %; every interval exact in all 21 multi-date documents; byte-identical output across runs with one secret and 0 of 59 pseudonyms shared across two secrets;
-10x the data (2,000 files) in 47 s and 149 MB. Of the 54 released patient profiles 40 are unique on (sex, age band, district); the attacker still needs a registry match, which is why the simulated rate is 35 % and not 74 %.</p>
+10x the data (2,000 files) in 47 s and 149 MB; a 5x-patient stress set (1,000 files) in 23 s. Of the 54 released patient profiles 40 are unique on (sex, age band, district); the attacker still needs a registry match, which is why the simulated rate is 35 % and not 74 %.</p>
 
 <h2>6. Known limitations</h2>
 <ul>
@@ -97,6 +97,6 @@ because the generalisation part is 10 % of the 20-point utility score, and priva
 <li>A name with no textual cue and absent from every structured field is found only by the rare-pair rule and can be missed.</li>
 <li>Rare diagnoses are kept because they are medical values, so a targeted attack using a known rare condition still partly succeeds (simulated 0.21 of the raw 1.00).</li>
 <li>dd/mm vs mm/dd is inferred per hospital from unambiguous dates; a hospital with none falls back to the global majority. JSON ages become band strings (a value-type change).</li>
-<li>Thresholds were tuned on one synthetic generator plus our own mutations; the hidden unseen-format dataset may still contain surprises. No LLM, no pretrained model and no external dataset is used.</li>
+<li>Fuzzing found and fixed real faults late (a record listing many patients bridged two clusters; two clusters could share one pseudonym); a time budget now guarantees a valid report, but more edge cases may exist. Thresholds were tuned on one synthetic generator plus our own mutations; the hidden unseen-format dataset may still contain surprises. No LLM, no pretrained model and no external dataset is used.</li>
 </ul>
 </body></html>

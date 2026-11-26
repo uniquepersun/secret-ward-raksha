@@ -14,7 +14,7 @@ standard library. Peak memory ~40 MB and ~4.5 s on the practice set; ~47 s and 1
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt        # setup (network allowed)
 RAKSHA_SECRET=practice .venv/bin/python main.py --input <dir> --output <dir>   # run (no network)
-.venv/bin/python -m unittest discover -s tests                            # 16 tests, ~1 s
+.venv/bin/python -m unittest discover -s tests                            # 19 tests, ~4 s
 ```
 
 `RAKSHA_SECRET` keys the pseudonyms and the per-patient date shifts. It is read from the environment only and is never
@@ -83,16 +83,29 @@ not copied anywhere. The input folder is never modified.
 
 | | practice | mutated, unseen names / headers / formats | + hard (labels, date formats) |
 |---|---:|---:|---:|
-| personal data still visible | 0.0 % (0 / 3,230) | 0.0 % | 0.0 % |
+| personal data still visible | 0.0 % (0 / 3,230) | 0.0 - 0.1 % (1) | 0.0 % |
 | canaries found | 0 / 4 | 0 / 4 | 0 / 4 |
 | medical values kept | 100.0 % | 100.0 % | 100.0 % |
-| linking precision / recall / F0.5 | 1.00 / 0.91 / 0.98 | 1.00 / 0.87 / 0.97 | 1.00 / 0.87 / 0.97 |
+| linking precision / recall / F0.5 | 1.00 / 0.91 / 0.99 | 1.00 / 0.79 / 0.95 (2) | 1.00 / 0.84 / 0.96 |
 | wrongly merged patients | 0 | 0 | 0 |
+
+(1) the 0.1 % is two registration rows where one patient's *shifted* date coincides with a different patient's DOB string in the same file;
+(2) the mutation harness permutes identifier digits only inside the surface strings listed in the truth file, so id forms that appear
+elsewhere (file-name fragments, metadata paths) become inconsistent and some genuine links are lost; precision is unaffected.
 
 Simulated attacker (`tools/attacker_sim.py`, our approximation of the published attack): patients re-identified 35 % (98 % on raw
 data); record-linkage risk 0.07 (0.58 on raw in our sim). Non-PII token retention 98.5 %; intervals exact in all 21 multi-date
 documents. The mutated sets come from `tools/mutate.py`: every name swapped for an unseen one, headers and keys renamed (English,
 Hinglish, Hindi), columns shuffled, phones and ids reformatted, labels and date formats changed, with a matching rewritten truth file.
+
+## Reliability guards (found by fuzzing, all covered by `tests/test_robustness.py`)
+
+* Detectors run in linear time: non-space runs over 300 characters are masked, very large texts are scanned in chunks, and two
+  quadratic regexes were fixed. A 5 MB single-line file takes about 50 s instead of never finishing.
+* Every stage is guarded per file: an odd file is quarantined with a reason code, never a crash. A hard time budget (`time_budget_s`,
+  default 540 s) quarantines whatever is left, so the run always ends with exit 0, a valid contract and an honest report.
+* A record that lists many patients (an index, a ward sheet) is stripped of linking evidence so it cannot bridge their clusters, and
+  two clusters can never share a pseudonym.
 
 ## Known limitations (honest list)
 
