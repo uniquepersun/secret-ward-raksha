@@ -12,3 +12,4 @@ min_group_size: 5          # reserved for rare-combination suppression
 time_budget_s: 540      # past this the remaining files are quarantined (reason time_budget_exceeded) so the run always finishes
 span_timeout_s: 20     # hard wall-clock cap for one scan of one text (a crafted input cannot stall the run)
 regex_timeout_s: 5      # per regex call; interrupts the matching engine itself (signals cannot)
+rare_procedures: 1      # also generalise a procedure held by a single patient (cost 4 values on practice data)

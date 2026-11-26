@@ -152,8 +152,8 @@ re-validates FHIR after every change.
   (Kruti Dev) is not decoded.
 * A name that appears nowhere in a structured field and has no textual cue is found only by the rare-pair rule; it can be missed.
 * dd/mm vs mm/dd is inferred statistically per hospital; a hospital with no unambiguous date anywhere falls back to the global majority.
-* Only a diagnosis held by a single patient is generalised (cost: 0.8% of medical values, targeted attack 0.24 -> 0.15 in our simulation). Rare *procedures* and
-  treatments that appear without an ICD code are not generalised, and a condition shared by two patients is kept.
+* Only a diagnosis held by a single patient is generalised (cost: 0.8% of medical values, targeted attack 0.24 -> 0.15 in our simulation). A procedure named in a `Procedure:` line or procedure column and held by a single patient is generalised too; a condition or procedure shared by two
+  patients is kept, and treatments appearing only in free prose are not generalised.
 * Ages in JSON become band strings, which changes that field's value type.
 * All thresholds were tuned on one synthetic generator's practice set plus our own mutations; hidden data may differ.
 * No trained model ships (the plan for a CRF / gradient-boosted second stage was dropped: rules plus the learned lexicon already

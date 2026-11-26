@@ -186,6 +186,7 @@ class Pipeline:
         self.age_max = int(policy.get("date_shift_max_days", 365))
         self.age_min = int(policy.get("date_shift_min_days", 90))
         self.rare_max = int(policy.get("rare_dx_max_patients", 1))
+        self.rare_proc = int(policy.get("rare_procedures", 1))      # 1 = also generalise procedures held by a single patient
         self.dx_display: dict = defaultdict(set)
         self.dx_patients: Counter = Counter()
         _detect.SPAN_TIMEOUT = float(policy.get("span_timeout_s", 20))
@@ -768,7 +769,26 @@ class Pipeline:
             for parts, key, v in self._iter_json(u.node, u.base):
                 if isinstance(v, str) and key.lower() in ("code", "icd", "icd10", "icd_code", "diagnosis_code") and self._ICD.fullmatch(v.strip()):
                     found.add(v.strip())
+        if self.rare_proc:
+            for term in self._procedure_terms(d, u, blob):
+                found.add("P:" + term.casefold())
+                self.dx_display["P:" + term.casefold()].add(term)
         return found
+
+    _PROC_TEXT = re.compile(r"(?im)\bprocedures?\s*[:\-]\s*([A-Za-z][A-Za-z \-]{3,60}?)(?=\s*[(.,;\n]|\s+done\b|\s+on\s+day|$)")
+    _PROC_KEYS = ("procedure", "surgery", "operation", "treatment_name", "procedure_name")
+
+    def _procedure_terms(self, d: DocState, u: Unit, blob: str) -> set:
+        out = {m.group(1).strip() for m in self._PROC_TEXT.finditer(blob)}
+        if d.kind == "json":
+            for parts, key, v in self._iter_json(u.node, u.base):
+                if isinstance(v, str) and key.lower() in self._PROC_KEYS and 4 <= len(v.strip()) <= 80:
+                    out.add(v.strip())
+        elif d.kind == "csv":
+            for j, h in enumerate(d.header):
+                if re.search(r"(?i)procedure|surgery|operation", h) and j < len(d.rows[u.node]) and 4 <= len(d.rows[u.node][j].strip()) <= 80:
+                    out.add(d.rows[u.node][j].strip())
+        return out
 
     def link(self):
         units = [(d, u) for d in self.docs if d.status == "sanitized" for u in d.units]
