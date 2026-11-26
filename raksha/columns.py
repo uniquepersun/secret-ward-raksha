@@ -15,7 +15,7 @@ from .translit import ascii_digits, has_deva, skeleton
 
 _H = lambda p: re.compile(p, re.I | re.U)  # noqa: E731
 
-HDR_RELNAME = _H(r"related.?person|caller|raised.?by|witness|visitor|informant|reporter|requester|called.?by|signed.?by|bystander|emergency.?contact|relative|guardian|father|mother|spouse|husband|wife|\bpita\b|\bpati\b|attendant|next.?of.?kin|\bnok\b|"
+HDR_RELNAME = _H(r"pitaji|patni|\bbiwi\b|\bmaa\b|\bbete?\b|\bbeti\b|sampark|sambandhi|saathi|related.?person|caller|raised.?by|witness|visitor|informant|reporter|requester|called.?by|signed.?by|bystander|emergency.?contact|relative|guardian|father|mother|spouse|husband|wife|\bpita\b|\bpati\b|attendant|next.?of.?kin|\bnok\b|"
                  r"care.?of|\bc/?o\b|कर्ता|अभिभावक|पिता|पति|संबंधी|रिश्ते")
 HDR_NAME = _H(r"(?:^|[\s_\-.:/])(name|naam|nm|patient|pt|full|first|last|given|family|surname|local|middle|caller|"
               r"contact.?person|informant|नाम|मरीज|रोगी)(?:$|[\s_\-.:/'’s])")

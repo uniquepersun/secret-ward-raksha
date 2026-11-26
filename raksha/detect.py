@@ -71,8 +71,9 @@ SEQ_TITLE = rf"{TITLE_TOK}(?:[ \t]{{1,2}}{TITLE_TOK}){{0,3}}"
 F = rx.IGNORECASE | rx.UNICODE | rx.MULTILINE
 
 # ---------------------------------------------------------------- identifiers (digit view)
-_RUN = _tc(r"(?<![\w])\+?\(?\d(?:\)?[ \-.]{0,2}\d){5,}(?![\w])")
+_RUN = _tc(r"(?<![\d])\+?\(?\d(?:\)?[ \-.]{0,2}\d){5,}(?![\d])")
 _MASKED = _tc(r"(?<![\w])(?:[Xx*•#]{2,4}[\s\-]?){2}\d{4}(?!\d)|(?<![\w])[Xx*•]{4}[\s-]?[Xx*•]{4}[\s-]?[Xx*•\d]{4}")
+_EMAIL_OBF = _tc(r"(?i)\b[\w.+\-]{1,}\s*(?:\[at\]|\(at\)|\{at\}|\sat\s)\s*[\w\-]{2,}\s*(?:\[dot\]|\(dot\)|\{dot\}|\sdot\s)\s*[a-z]{2,}\b")
 _EMAIL = _tc(r"(?<![\w.+\-])[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+|(?<![\w])[\w.\-]{3,}@(?:abdm|sbx|ndhm|abha)\b", rx.I)
 _PAN = _tc(r"(?<![A-Za-z0-9])[A-Z]{5}\d{4}[A-Z](?![A-Za-z0-9])")
 _ALNUM_ID = _tc(r"(?<![\w/\-])(?=[A-Za-z0-9/\-]*\d)[A-Za-z]{2,6}(?:[\-/][A-Za-z0-9]{1,10}){1,4}(?![\w])|"
@@ -107,7 +108,17 @@ _TEHSIL_CUE = _tc(rf"(?i)(?<![\w])(?:tehsil|tahsil|taluk|block|तहसील)\
 _VILLAGE_CUE = _tc(rf"(?i)(?<![\w])(?:village|vill\.?|gram|gaon|gaanv|grm|ग्राम|गाँव|गांव|मौजा)\s*(?:[:\-.]\s*)?({SEQ_STRONG})")
 _PIN = _tc(r"(?i)(?:pin\s*(?:code)?|postal\s*code|पिन(?:\s*कोड)?)\s*(?:[:\-]\s*)?([1-9]\d{5})(?!\d)|"
                   r"(?:(?<=[A-Za-z\u0900-\u097F\)])\s*[\-,]\s*)([1-9]\d{5})(?!\d)")
+_RELWORD_BEFORE = _tc(r"(?i)(?:father|mother|husband|wife|spouse|guardian|relative|attendant|son|daughter|brother|sister|kin|caregiver|care-giver|pita|patni|pati|bhai|behen|माता|पिता|पति|पत्नी)(?:'?s)?[\s_\-]*(?:of)?[\s_\-]*$")
+_RELWORD_INSIDE = _tc(r"(?i)^(?:father|mother|husband|wife|spouse|guardian|relative|attendant|kin|caregiver)(?:'?s)?[\s_\-]*name")
+_DEVTOK = r"(?:[\u0900-\u097F]{2,})"
+_DEVSEQ = rf"{_DEVTOK}(?:[ \t]{{1,2}}{_DEVTOK}){{0,2}}"
+_DEV_REL = "बेटी|बेटा|पुत्र|पुत्री|भाई|बहन|माँ|मां|माता|पिता|पति|पत्नी|ससुर|सास|दादा|दादी|चाचा|चाची|मामा|मौसी|बहू|दामाद|देवर|भाभी|बच्चा|बच्ची"
+_DEV_AFTER_REL = _tc(rf"(?<![\w\p{{M}}])(?:{_DEV_REL})\s*[-:–]?\s*({_DEVSEQ})")
+_DEV_BEFORE_REL = _tc(rf"(?<![\w\p{{M}}])({_DEVSEQ})\s+(?:की|का|के)\s+(?:{_DEV_REL})(?![\w\p{{M}}])")
+_DEV_PT = _tc(rf"(?<![\w\p{{M}}])(?:रोगी|मरीज़?|पेशेंट|अटेंडेंट|परिजन|देखभालकर्ता)\s*(?:का\s*नाम)?\s*[:\-–]\s*({_DEVSEQ})")
 _NEXTWORD = _tc(r"[ \t]+(\p{L}+)")
+_MEDICAL_ONLY = lex.LABS | lex.DRUGS | lex.DISEASES | lex.UNITS | lex.DOSAGE_FORMS | lex.ANATOMY | lex.PROCEDURES | lex.ABBREV
+_GAON = _tc(r"(?<![\w\p{M}])(\p{Lu}[\p{L}]{2,}(?:\s+\p{Lu}[\p{L}]{2,})?)\s+(?i:gaon|gaanv|gram|village|vill\.?)(?![\w\p{M}])")
 _PLACE_PIN = _tc(r"(?<![\w.,])(\p{Lu}[\p{L}]{2,})\s+([1-8]\d{5})(?![\d.,]|\s*(?:mg|ml|g|kg|iu|/|%|cells|per|x10|u/l|/ul))")
 _BARE_PIN = _tc(r"(?<![\d.])[1-9]\d{5}(?![\d.]|\s*(?:mg|ml|g|kg|iu|%))")
 
@@ -238,6 +249,7 @@ class Lexicon:
 
 
 DEV_COMMON = frozenset("""
+आया आई आए आये आयी गए गये गयी आता आती जाता जाती करता करती दिया दी दिए लिया ली लिए बताया बताई बोला बोली कहा कहा। रहता रहती आते
 है हैं था थी थे हो हुआ हुई हुए गया गयी गए रहा रही रहे कर करो करना करें किया और या भी नहीं अब अभी जब तब कल आज रात सुबह
 दोपहर शाम दिन से तक लिए लेना देना वाला वाली वाले मत दवा दवाई गोली बुखार खांसी खाँसी दर्द पेट सर सिर बहुत थोड़ा ज्यादा कम ठीक अच्छा
 बुरा सब कुछ कोई एक दो तीन चार पाँच पांच छह सात आठ नौ दस घर यहाँ वहाँ क्यों कैसे कौन कब कितना पानी खाना नींद उल्टी दस्त मरीज
@@ -276,7 +288,11 @@ def _trim_seq(text: str, start: int, end: int, strong: bool) -> tuple[int, int]:
         if tl in lex.GENERIC_NAME_PARTS and tl not in ("kumar", "devi", "singh", "kaur", "md", "mohd", "mohammad", "bano", "begum", "khan", "lal", "ram"):
             if count == 0:
                 return start, start
-            break
+            keep_end = start + m.end()         # a surname-like part after a real name token ("geeta rani") is part of the name
+            count += 1
+            continue
+        if tl in ("m", "f", "t") and tok.rstrip(".").upper() in ("M", "F", "T"):
+            break                              # "50/F": a sex marker, not an initial
         if has_deva(tok):
             if tok in DEV_COMMON or tok in lex.STOP_NAME_TOKENS:
                 break
@@ -357,6 +373,8 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
     # ---- identifiers --------------------------------------------------------------------
     for m in _EMAIL.finditer(v):
         add(m.start(), m.end(), "ID", "EMAIL", 1)
+    for m in _EMAIL_OBF.finditer(v):
+        add(m.start(), m.end(), "ID", "EMAIL", 1)
     for m in _MASKED.finditer(v):
         add(m.start(), m.end(), "ID", "AADHAAR_MASKED", 1)
     for m in _PAN.finditer(v):
@@ -409,11 +427,14 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
     for m in _LANDMARK.finditer(text):
         add(m.start(), m.end(), "ADDR", "LANDMARK", 3)
     for m in _PLACE_PIN.finditer(v):            # "Pune 411001": a 6-digit PIN right after a place name
-        if not lex.known_nonname(m.group(1)):
+        if m.group(1).lower() not in _MEDICAL_ONLY:
             add(m.start(2), m.end(2), "PIN", "PIN", 3)
     for m in _PIN.finditer(v):
         g = 1 if m.group(1) else 2
         add(m.start(g), m.end(g), "PIN", "PIN", 3)
+    for m in _GAON.finditer(text):               # "Rampur gaon"
+        if not lex.known_nonname(m.group(1).split()[0]):
+            add(m.start(1), m.end(1), "VILLAGE", "VILLAGE", 4)
     for m in _TEHSIL_CUE.finditer(text):
         s, e = _trim_seq(text, m.start(1), m.end(1), True)
         add(s, e, "TEHSIL", "TEHSIL", 4)
@@ -430,7 +451,9 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
             add(s2, e2, "NAME", role, prio)
 
     for m in _STRONG_LABEL.finditer(text):
-        add_name(m.start(1), m.end(1), "patient", True, 3)
+        before = text[max(0, m.start() - 24):m.start()]
+        rel = bool(_RELWORD_BEFORE.search(before)) or bool(_RELWORD_INSIDE.search(m.group(0)))
+        add_name(m.start(1), m.end(1), "relative" if rel else "patient", True, 3)
     for m in _WEAK_LABEL.finditer(text):
         add_name(m.start(1), m.end(1), "patient", False, 4)
     for m in _OTHER_LABEL.finditer(text):
@@ -444,6 +467,9 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
         add_name(m.start(1), m.end(1), "relative", False, 3)
     for m in _RELATION_LOW.finditer(text):
         add_name(m.start(1), m.end(1), "relative", True, 3)
+    for pat, role in ((_DEV_AFTER_REL, "relative"), (_DEV_BEFORE_REL, "relative"), (_DEV_PT, "patient")):
+        for m in pat.finditer(text):
+            add_name(m.start(1), m.end(1), role, True, 3)
     for m in _SUFFIX.finditer(text):
         add_name(m.start(1), m.end(1), "patient", False, 4)
     for m in _ROLE_AFTER.finditer(text):
@@ -596,13 +622,19 @@ def doctor_names(text: str) -> list[str]:
 
 
 def _resolve(spans: list[Span]) -> list[Span]:
-    """Longest-first greedy selection; ties go to the more specific (lower prio number) kind."""
+    """Longest-first greedy selection; ties go to the more specific (lower prio number) kind. O(n log n)."""
+    import bisect
     spans = sorted(spans, key=lambda s: (-(s.end - s.start), s.prio, s.start))
+    starts: list[int] = []
     taken: list[Span] = []
     for s in spans:
-        if all(s.end <= t.start or s.start >= t.end for t in taken):
-            taken.append(s)
-    taken.sort(key=lambda s: s.start)
+        i = bisect.bisect_left(starts, s.start)
+        if i > 0 and taken[i - 1].end > s.start:
+            continue
+        if i < len(taken) and taken[i].start < s.end:
+            continue
+        starts.insert(i, s.start)
+        taken.insert(i, s)
     return taken
 
 

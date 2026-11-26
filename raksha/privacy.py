@@ -49,7 +49,8 @@ def pseudonym(key: str) -> str:
 _ISO = rx.compile(r"(?<![\d])(\d{4})-(\d{2})-(\d{2})(?:([T ])(\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(Z|[+-]\d{2}:?\d{2})?)?(?![\d])")
 _NUM = rx.compile(r"(?<![\d.])(\d{1,2})([/.\-])(\d{1,2})\2(\d{4}|\d{2})(?![\d])")
 _YMD_SLASH = rx.compile(r"(?<![\d])(\d{4})([/.])(\d{1,2})\2(\d{1,2})(?![\d])")
-_WRITTEN = rx.compile(r"(?i)(?<![\d\w])(\d{1,2})(?:st|nd|rd|th)?[\s\-]+(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?,?[\s\-]+(\d{4})(?![\d])")
+_WRITTEN = rx.compile(r"(?i)(?<![\d\w])(\d{1,2})(?:st|nd|rd|th)?[\s\-]+(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?,?[\s\-]+['\u2019]?(\d{4}|\d{2})(?![\d])")
+_MONTH_YEAR = rx.compile(r"(?i)(?<![\d\w])(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?,?\s+(\d{4})(?![\d])")
 _WRITTEN2 = rx.compile(r"(?i)(?<![\w])(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})(?![\d])")
 
 
@@ -126,7 +127,9 @@ def shift_text_dates(text: str, days: int, order: str = "dmy") -> tuple[str, int
         add(m, f"{n.year:04d}{sep}{n.month:02d}{sep}{n.day:02d}")
     mon_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     for m in _WRITTEN.finditer(t):
-        d = _safe(int(m.group(3)), MONTHS[m.group(2).lower()[:4] if m.group(2).lower() == "sept" else m.group(2).lower()[:3]], int(m.group(1)))
+        yv = int(m.group(3))
+        yv = yv if len(m.group(3)) == 4 else (2000 + yv if yv < 70 else 1900 + yv)
+        d = _safe(yv, MONTHS[m.group(2).lower()[:4] if m.group(2).lower() == "sept" else m.group(2).lower()[:3]], int(m.group(1)))
         if d is None:
             continue
         n = d + dt.timedelta(days=days)
@@ -137,6 +140,15 @@ def shift_text_dates(text: str, days: int, order: str = "dmy") -> tuple[str, int
             continue
         n = d + dt.timedelta(days=days)
         add(m, f"{mon_names[n.month - 1]} {n.day}, {n.year}")
+    day_edits = {(e[0], e[1]) for e in edits}
+    for m in _MONTH_YEAR.finditer(t):            # "born in March 1985": no day given, shift from the middle of the month
+        if any(a <= m.start() < b or a < m.end() <= b for a, b in day_edits):
+            continue
+        d = _safe(int(m.group(2)), MONTHS[m.group(1).lower()[:3]], 15)
+        if d is None:
+            continue
+        n = d + dt.timedelta(days=days)
+        add(m, f"{mon_names[n.month - 1]} {n.year}")
     inv = {v: k for k, v in reversed(list(HI_MONTHS.items()))}
     for m in _HINDI.finditer(t):
         d = _safe(int(m.group(3)), HI_MONTHS[m.group(2)], int(m.group(1)))

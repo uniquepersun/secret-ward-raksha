@@ -34,6 +34,7 @@ _B64 = re.compile(r"^[A-Za-z0-9+/]{24,}={0,2}$")
 _B64RUN = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{24,}={0,2}(?![A-Za-z0-9+/=])")
 _HEXRUN = re.compile(r"(?<![0-9A-Fa-f])(?:[0-9A-Fa-f]{2}){12,}(?![0-9A-Fa-f])")
 _UESC = re.compile(r"\\u([0-9a-fA-F]{4})")
+from .detect import DEV_COMMON as DEV_COMMON_NAMES
 _PSN_REPEAT = re.compile(r"(PSN-[0-9A-Z]{8})(?:[ _\-]+\1)+")
 
 
@@ -875,7 +876,7 @@ class Pipeline:
             core = frozenset({s for s in sk if s not in self.lx.generic_skels} or sk)
             # only a name that matches one of THIS patient's own names takes the pseudonym; a wife, a visitor or another
             # patient mentioned in the same note is just [NAME]
-            own = any(partial(core, n) for n in ctx.names) if ctx.names else (r == "patient")
+            own = any(partial(core, n) for n in ctx.names) if ctx.names else (r == "patient" and span.prio <= 3)
             if ctx.psn and r != "relative" and core and own:
                 return ctx.psn
             return br("NAME")
@@ -1244,7 +1245,8 @@ class Pipeline:
         for i, p in enumerate(parts):
             stem, dot, ext = p.rpartition(".") if i == len(parts) - 1 and "." in p else (p, "", "")
             ctx = self.ctx_from_string(p, d)
-            s = self.scrub_text(stem.replace("_", " "), ctx, plain=True, dates=False, loose=False) if self._needs_scrub(stem) else stem
+            s = self.scrub_text(stem.replace("_", " "), ctx, plain=True, dates=False, loose=True) if self._needs_scrub(stem) else stem
+            s = re.sub(r"[\u0900-\u097F]{2,}", lambda m: m.group(0) if m.group(0) in DEV_COMMON_NAMES else "NAME", s)
             if s != stem:
                 s = re.sub(r"\s+", "_", s.strip())
                 s = _PSN_REPEAT.sub(r"\1", s)
@@ -1259,7 +1261,7 @@ class Pipeline:
         return out
 
     def _needs_scrub(self, s: str) -> bool:
-        return bool(find_spans(s.replace("_", " "), self.lx, loose=False))
+        return bool(find_spans(s.replace("_", " "), self.lx, loose=True))
 
     @staticmethod
     def confined(dest: Path, root: Path) -> bool:
