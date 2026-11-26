@@ -35,6 +35,12 @@ _DIGITS_AFTER_NAME = rx.compile(r"(?<=[A-Za-z\u0900-\u097F_])_(\d{4,})(?!\d)")
 _MEDCODE = rx.compile(r"^(?:[A-Z]\d{2}(?:\.\d+)?|\d{3,5}-\d|[A-Z]{1,3}\d{2,3}[A-Z]?)$")  # ICD / LOINC / package codes
 _PHONE_CUE = rx.compile(r"(?i)(?:mob(?:ile)?|ph(?:one)?|tel|contact|cell|call|whatsapp|no\.?)\s*[:.\-]?\s*$")
 _SPLIT_PHONE = rx.compile(r"(?<![\d])[6-9]\d{4}[ \t]*\r?\n[ \t]*\d{5}(?![\d])")
+_DW_EN = r"(?:zero|one|two|three|four|five|six|seven|eight|nine|oh)"
+_DW_HI = r"(?:शून्य|एक|दो|तीन|चार|पांच|पाँच|छह|छः|सात|आठ|नौ)"
+_DIGIT_WORDS = rx.compile(rf"(?i)(?<![\w\p{{M}}])(?:{_DW_EN}(?:[ ,\-]+{_DW_EN}){{9,13}}|{_DW_HI}(?:[ ,\-]+{_DW_HI}){{9,13}})(?![\w\p{{M}}])")
+_SPACED = rx.compile(r"(?<![\w])(?:\p{L}[ .\-_]){4,}\p{L}(?![\w])")
+_CUE_THEN_WORD = rx.compile(r"(?i:\b(?:said|says|told|informed|named|called|neighbou?r|friend|brother|sister|uncle|aunt|cousin|nephew|niece|colleague|boss|landlord|driver|maid)\s+)(\p{Lu}\p{Ll}{3,})(?![\p{L}\p{M}])")
+_UUID = rx.compile(r"(?i)(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])")
 _URL = rx.compile(r"(?i)\b(?:https?://|www\.)[^\s\"'<>)\]]+|(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])")  # URLs and UUIDs are never PII
 _DATEISH = rx.compile(r"^\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4}$")
 
@@ -289,6 +295,8 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
             while s < e and v[s] == " ":
                 s += 1
             add(s, e, "ID", "NUMBER", 2)
+    for m in _DIGIT_WORDS.finditer(text):
+        add(m.start(), m.end(), "ID", "NUMBER", 2)
     for m in _SPLIT_PHONE.finditer(v):
         add(m.start(), m.end(), "ID", "NUMBER", 2)
     for m in _LABELLED_ID.finditer(v):
@@ -409,6 +417,17 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
                     hit = lx.name_skels[sk]
         if hit and not _is_doctor_context(text, m.start()):
             add(m.start(), end, "NAME", hit, 6)
+    # letter-spaced words ("K i s h o r i l a l"): collapse, then test as a name token or two
+    if loose:
+        for m in _SPACED.finditer(text):
+            seg = m.group(0)
+            word = re.sub(r"[ .\-_]", "", seg)
+            tl = word.casefold()
+            parts = rx.findall(r"\p{Lu}\p{Ll}*", word) or [word]
+            hit = any(len(w) >= 4 and (w.casefold() in lx.name_tokens or w.casefold() in lex.SEED_GIVEN
+                                       or w.casefold() in lex.SEED_SURNAME) and not lex.known_nonname(w) for w in parts + [word])
+            if len(word) >= 5 and hit:
+                add(m.start(), m.end(), "NAME", "patient", 5)
     # village phrases
     if lx.village_phr:
         toks = [(m.start(), m.end(), skeleton(m.group(0))) for m in _TOKEN.finditer(text)]
@@ -421,24 +440,53 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
     # generic last resort: rare Title-Case 2-3 token sequence made of plausible name tokens
     pair_rx = rx.compile(rf"(?<![\w\p{{M}}])({TITLE_TOK}(?:[ \t]{{1,2}}{TITLE_TOK}){{1,2}})(?![\w\p{{M}}])")
     for m in (pair_rx.finditer(text) if loose else ()):
-        seq = m.group(1)
-        toks = [t.strip(".'’-") for t in _TOKEN.findall(seq)]
-        if len(toks) < 2 or any(len(t) < 2 or lex.known_nonname(t) for t in toks):
-            continue
-        if any(has_deva(t) for t in toks):
-            continue
-        if _is_doctor_context(text, m.start(1)):
-            continue
-        seed = sum(t.lower() in lex.SEED_GIVEN or t.lower() in lex.SEED_SURNAME for t in toks)
-        df = lx.df.get(seq.casefold(), 0)
-        # unknown but rare Title-Case pair, clear of every vocabulary: very likely a person (canary-style names)
-        if (seed >= 1 and df <= 4) or (df <= 3 and all(len(t) >= 3 for t in toks)):
-            add(m.start(1), m.end(1), "NAME", "other", 7)
+        seq_start = m.start(1)
+        run, runs = [], []
+        for tm in _TOKEN.finditer(m.group(1)):
+            t = tm.group(0).strip(".'’-")
+            ok = len(t) >= 3 and not lex.known_nonname(t) and not has_deva(t)
+            if ok:
+                run.append((seq_start + tm.start(), seq_start + tm.end(), t))
+            else:
+                if run:
+                    runs.append(run)
+                run = []
+        if run:
+            runs.append(run)
+        for r in runs:
+            if len(r) < 2 or _is_doctor_context(text, r[0][0]):
+                continue
+            seq = text[r[0][0]:r[-1][1]]
+            seed = sum(t.lower() in lex.SEED_GIVEN or t.lower() in lex.SEED_SURNAME for _, _, t in r)
+            df = lx.df.get(seq.casefold(), 0)
+            # unknown but rare Title-Case run, clear of every vocabulary: very likely a person (canary-style names)
+            if (seed >= 1 and df <= 4) or df <= 3:
+                add(r[0][0], r[-1][1], "NAME", "other", 7)
+    # an unknown Title-Case word right after a person-cue word ("neighbour Raghunath", "said Raghunath")
+    if loose:
+        for m in _CUE_THEN_WORD.finditer(text):
+            t = m.group(1)
+            if len(t) >= 4 and not lex.known_nonname(t) and not t.isupper() and t.lower() not in lex.STOP_NAME_TOKENS:
+                add(m.start(1), m.end(1), "NAME", "other", 7)
+    # a lone, mid-sentence Title-Case token that is a common given name / surname ("said Raghunath stayed")
+    if loose:
+        for m in _TOKEN.finditer(text):
+            t = m.group(0).strip(".'’-")
+            tl = t.lower()
+            if len(t) >= 4 and t[:1].isupper() and not t.isupper() and (tl in lex.SEED_GIVEN or tl in lex.SEED_SURNAME) \
+                    and not lex.known_nonname(t) and not _is_doctor_context(text, m.start()):
+                before = text[max(0, m.start() - 3):m.start()]
+                if re.search(r"[A-Za-z,]\s+$", before) and not re.search(r"[.!?:]\s+$", before):    # mid-sentence only
+                    add(m.start(), m.start() + len(t), "NAME", "other", 7)
+
+    uuids = [(m.start(), m.end()) for m in _UUID.finditer(text)]
 
     def _in_url(sp):
+        if any(sp.start >= us and sp.end <= ue for us, ue in uuids):
+            return True
         if not any(sp.start >= us and sp.end <= ue for us, ue in urls):
             return False
-        if re.fullmatch(r"(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", text[sp.start:sp.end]):
+        if any(sp.start >= us and sp.end <= ue for us, ue in uuids):      # anything inside a UUID is never PII
             return True
         # a phone / e-mail / PAN / known name inside a link (wa.me/9198..., mailto:) is still PII
         keep = (sp.kind == "ID" and sp.role in ("NUMBER", "EMAIL", "PAN", "AADHAAR_MASKED")) or (sp.kind == "NAME" and sp.prio <= 6)

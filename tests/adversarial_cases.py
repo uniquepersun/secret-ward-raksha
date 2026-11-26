@@ -26,12 +26,18 @@ CASES = [
  ("Guardian: Tabassum Khatoon, Mohalla Chowk, near Jama Masjid, PIN 226003", ["Tabassum Khatoon", "Chowk", "Jama Masjid", "226003"], []),
  ("shahid sahab ka BP theek hai, dawa de di", ["shahid"], ["BP theek hai"]),
  ("Born 12 अप्रैल 1977, admitted 3 मई 2026", ["12 अप्रैल 1977", "3 मई 2026"], []),
+ ("Call nine eight one one one two two two three three for the report", ["nine eight one one one two two two three three"], ["report"]),
+ ("फोन नंबर नौ आठ एक एक एक दो दो दो तीन तीन है", ["नौ आठ एक एक एक दो दो दो तीन तीन"], []),
+ ("Patient K i s h o r i l a l B h a n d a r i arrived", ["K i s h o r i l a l"], ["arrived"]),
+ ("Name: Kishori-\nlal Bhandari seen today", ["Kishori-\nlal"], ["seen today"]),
+ ("Yesterday Ramchandra Joshi came with fever and cough", ["Ramchandra Joshi"], ["fever and cough"]),
+ ("The family said Raghunath stayed overnight with the patient", ["Raghunath"], ["stayed overnight"]),
  ("Insurance PMJAY-UP-5521908834 policy POL/21/99887766 claim BL/26/00123", ["5521908834", "99887766", "BL/26/00123"], []),
 ]
 
 def main():
     lx = Lexicon()
-    lx.add_name("Shahid Khan")      # lowercase "shahid sahab" must still be caught once the name is known
+    lx.add_name("Shahid Khan"); lx.add_name("Kishorilal Bhandari")      # lowercase "shahid sahab" must still be caught once the name is known
     bad = 0
     for text, gone, stay in CASES:
         out, pos = [], 0

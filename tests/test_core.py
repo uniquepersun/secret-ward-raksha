@@ -61,7 +61,7 @@ class Identifiers(unittest.TestCase):
             self.assertIn("<ID>", scrub(f"id {v}"), v)
 
     def test_ranges_uuids_and_codes_are_kept(self):
-        for t in ["range 150000-410000", "urn:uuid:3e8b02cd-9e10-4da8-9053-d47573e43248", "ICD D64.9 LOINC 718-7 pkg SG050A"]:
+        for t in ['<div xmlns="http://www.w3.org/1999/xhtml">x</div>', "id 6cd93b57-6d6d-453c-aaf2-829280011963 ok",  '"system": "http://terminology.hl7.org/CodeSystem/v2-0203"', "range 150000-410000", "urn:uuid:3e8b02cd-9e10-4da8-9053-d47573e43248", "ICD D64.9 LOINC 718-7 pkg SG050A"]:
             self.assertEqual(scrub(t), t)
 
 
