@@ -8,6 +8,7 @@ import argparse, json, os, re, subprocess, sys, tempfile, time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+PY = str(ROOT / ".venv/bin/python") if (ROOT / ".venv/bin/python").exists() else sys.executable
 
 
 def sh(cmd, env=None):
@@ -22,7 +23,7 @@ def grab(pat, text, group=1, cast=float, default=float("nan")):
 def run_one(name, inp, truth, kit, out):
     env = dict(os.environ, RAKSHA_SECRET="practice")
     t0 = time.monotonic()
-    subprocess.run([sys.executable, str(ROOT / "main.py"), "--input", str(inp), "--output", str(out)], env=env, capture_output=True)
+    subprocess.run([PY, str(ROOT / "main.py"), "--input", str(inp), "--output", str(out)], env=env, capture_output=True)
     secs = time.monotonic() - t0
     contract = "CONTRACT OK" in sh([sys.executable, str(kit / "validate_output.py"), "--input", str(inp), "--output", str(out)])
     chk = sh([sys.executable, str(kit / "check_dev.py"), "--truth", str(truth), "--output", str(out)])

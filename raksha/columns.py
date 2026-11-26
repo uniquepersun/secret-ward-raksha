@@ -15,7 +15,7 @@ from .translit import ascii_digits, has_deva, skeleton
 
 _H = lambda p: re.compile(p, re.I | re.U)  # noqa: E731
 
-HDR_RELNAME = _H(r"relative|guardian|father|mother|spouse|husband|wife|\bpita\b|\bpati\b|attendant|next.?of.?kin|\bnok\b|"
+HDR_RELNAME = _H(r"caller|raised.?by|witness|visitor|informant|reporter|requester|called.?by|signed.?by|bystander|emergency.?contact|relative|guardian|father|mother|spouse|husband|wife|\bpita\b|\bpati\b|attendant|next.?of.?kin|\bnok\b|"
                  r"care.?of|\bc/?o\b|कर्ता|अभिभावक|पिता|पति|संबंधी|रिश्ते")
 HDR_NAME = _H(r"(?:^|[\s_\-.:/])(name|naam|nm|patient|pt|full|first|last|given|family|surname|local|middle|caller|"
               r"contact.?person|informant|नाम|मरीज|रोगी)(?:$|[\s_\-.:/'’s])")
@@ -24,6 +24,8 @@ HDR_NONPERSON = _H(r"hospital|facility|lab|test|drug|medic|ward|dept|department|
                    r"clinic|source|unit|category|type|schema|status|consultant|doctor|physician|referr?ed|practitioner|"
                    r"author|ref.?doc|\bdr\b|औषधि|दवा|अस्पताल")
 HDR_DOCTOR = _H(r"doctor|consultant|physician|practitioner|referr?ed.?by|ref.?doctor|author|\bdr\b|surgeon|डॉक्टर")
+HDR_ENC = _H(r"trip|sample|\bbill|invoice|visit|claim|ticket|order|receipt|serial|batch|encounter|appointment|token|\bticket\b")
+HDR_PATID = _H(r"uhid|mrn|patient|\bpt\b|hosp(?:ital)?.?id|reg(?:istration)?.?no|पंजीकरण|यूएचआईडी")
 HDR_CODE = _H(r"package|procedure|code|coding|loinc|snomed|icd|cpt|system|schema|version|\bunit\b|range")
 HDR_PHONE = _H(r"phone|mobile|mob\b|cell|contact|tel|callback|whatsapp|फोन|मोबाइल|संपर्क|दूरभाष")
 HDR_AADHAAR = _H(r"aadhaar|aadhar|adhar|uid\b|आधार")
@@ -123,6 +125,8 @@ def infer_role(header: str, values: list, known_names=None) -> str:
     if _share(dv, lambda v: bool(_ID_V.match(v)) and len(v) >= 6) >= 0.7:
         if HDR_CODE.search(h) and not HDR_HID.search(h):
             return "KEEP"
+        if HDR_ENC.search(h) and not HDR_PATID.search(h):
+            return "ENCID"      # trip / bill / visit / ticket ids: redacted, but they do not identify a patient
         return "HID" if not HDR_INSID.search(h) else "INSID"
     if HDR_AGE.search(h) and _share(dv, lambda v: bool(_AGE_V.match(v))) >= 0.6:
         return "AGE"

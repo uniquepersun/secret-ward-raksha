@@ -56,12 +56,14 @@ _BARE_PIN = rx.compile(r"(?<![\d.])[1-9]\d{5}(?![\d.]|\s*(?:mg|ml|g|kg|iu|%))")
 _STRONG_LABEL = rx.compile(rf"(?i)(?<![\w])(?:patient(?:['’]s)?[\s_]*name|pt\.?[\s_]*name|name[\s_]*of[\s_]*(?:the[\s_]*)?patient|"
                            rf"full[\s_]*name|first[\s_]*name|last[\s_]*name|name|naam|नाम|मरीज\s*का\s*नाम|रोगी\s*का\s*नाम|"
                            rf"पूरा\s*नाम|nom)\s*[:\-=]\s*({SEQ_STRONG})")
-_WEAK_LABEL = rx.compile(rf"(?i)(?<![\w])(?:patient|pt\.?|caller|informant|contact(?:\s*person)?|witness(?:ed)?(?:\s*by)?|"
-                         rf"attendant|guardian|visitor|bystander|relative|raised\s*by|called\s*by|signed\s*by|reported\s*by|"
-                         rf"requested\s*by|handed\s*over\s*to|spoke\s*(?:to|with)|note\s*for|report\s*(?:for|of)|"
-                         rf"record\s*(?:for|of)|letter\s*(?:for|of)|referral\s*for|certificate\s*(?:for|of)|consent\s*(?:of|for)|"
+_WEAK_LABEL = rx.compile(rf"(?i)(?<![\w])(?:patient|pt\.?|note\s*for|report\s*(?:for|of)|record\s*(?:for|of)|letter\s*(?:for|of)|"
+                         rf"referral\s*for|certificate\s*(?:for|of)|consent\s*(?:of|for)|admitted\s*:|"
                          rf"mr\.?|mrs\.?|ms\.?|miss|mx|smt\.?|shri|shree|sri|km\.?|kumari|master|baby|late|"
                          rf"श्रीमती|श्री|कुमारी|सुश्री|मास्टर|मरीज|रोगी|पेशेंट|स्व\.?)[\s:.\-]+({SEQ_TITLE})")
+_OTHER_LABEL = rx.compile(rf"(?i)(?<![\w])(?:caller|informant|contact(?:\s*person)?|witness(?:ed)?(?:\s*by)?|attendant|guardian|"
+                          rf"visitor|bystander|relative|next\s*of\s*kin|emergency\s*contact|raised\s*by|called\s*by|signed\s*by|"
+                          rf"reported\s*by|requested\s*by|handed\s*over\s*to|spoke\s*(?:to|with)|accompanied\s*by|brought\s*by)"
+                          rf"[\s:.\-]+({SEQ_TITLE})")
 _RELATION = rx.compile(rf"(?i)(?<![\w])(?:s\s*/\s*o|d\s*/\s*o|w\s*/\s*o|h\s*/\s*o|c\s*/\s*o|son\s+of|daughter\s+of|wife\s+of|"
                        rf"husband\s+of|father|mother|guardian|spouse|relative|attendant|पुत्र|पुत्री|पत्नी|पति|सुपुत्र|"
                        rf"सुपुत्री|पिता|माता|द्वारा)\b?\.?[\s:\-]*(?:(?:name|naam|नाम)\s*[:\-]?\s*)?(?:श्री(?:मती)?\s+|mr\.?\s+|mrs\.?\s+|smt\.?\s+|shri\s+)?"
@@ -310,6 +312,8 @@ def find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> li
         add_name(m.start(1), m.end(1), "patient", True, 3)
     for m in _WEAK_LABEL.finditer(text):
         add_name(m.start(1), m.end(1), "patient", False, 4)
+    for m in _OTHER_LABEL.finditer(text):
+        add_name(m.start(1), m.end(1), "other", False, 4)
     for m in _RELATION.finditer(text):
         label = m.group(0).lower()
         if re.match(r"\s*(?:c\s*/\s*o|h\s*/\s*o)", label) or label.startswith(("father", "mother", "guardian", "spouse", "relative", "attendant")):

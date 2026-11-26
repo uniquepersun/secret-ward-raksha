@@ -30,7 +30,8 @@ class Ev:
 
     @property
     def has_identity(self) -> bool:
-        return bool(self.ids or self.strong or self.phones or self.names or self.cores)
+        # patient-role evidence only: a lone phone number may be a caller, visitor or attendant
+        return bool(self.ids or self.strong or self.names)
 
 
 def name_set(tokens) -> frozenset:

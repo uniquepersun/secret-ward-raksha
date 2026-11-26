@@ -386,7 +386,7 @@ class Pipeline:
             self.lx.add_name(v, "relative" if role == "RELNAME" else "patient")
         elif role == "VILLAGE":
             self.lx.add_village(v)
-        elif role in ("HID", "INSID", "AADHAAR", "ABHA", "PAN", "PHONE", "EMAIL"):
+        elif role in ("HID", "ENCID", "INSID", "AADHAAR", "ABHA", "PAN", "PHONE", "EMAIL"):
             self.lx.add_id(v)
             if role == "PHONE":
                 p = phone10(v)
@@ -399,7 +399,7 @@ class Pipeline:
 
     def _learn_table(self, d: DocState):
         for j, role in enumerate(d.roles):
-            if role in ("NAME", "RELNAME", "VILLAGE", "HID", "INSID", "AADHAAR", "ABHA", "PAN", "PHONE", "EMAIL", "PIN", "TEHSIL", "DISTRICT"):
+            if role in ("NAME", "RELNAME", "VILLAGE", "HID", "ENCID", "INSID", "AADHAAR", "ABHA", "PAN", "PHONE", "EMAIL", "PIN", "TEHSIL", "DISTRICT"):
                 for r in d.rows:
                     if j < len(r):
                         self._learn_value(role, r[j])
@@ -408,7 +408,7 @@ class Pipeline:
     def _learn_json(self, d: DocState):
         for parts, key, v in self._iter_json(d.data):
             role = self.json_roles.get(sig_join(parts), "KEEP")
-            if role in ("NAME", "RELNAME", "VILLAGE", "HID", "INSID", "AADHAAR", "ABHA", "PAN", "PHONE", "EMAIL", "PIN", "TEHSIL", "DISTRICT"):
+            if role in ("NAME", "RELNAME", "VILLAGE", "HID", "ENCID", "INSID", "AADHAAR", "ABHA", "PAN", "PHONE", "EMAIL", "PIN", "TEHSIL", "DISTRICT"):
                 self._learn_value(role, str(v))
         # keys that look like ids / names (dicts keyed by patient)
         def keys(node):
@@ -777,6 +777,9 @@ class Pipeline:
         if role == "HID":
             self.entities["MRN"] += 1
             return ctx.psn or "[ID]"
+        if role == "ENCID":
+            self.entities["ENCOUNTER_ID"] += 1
+            return "[ID]"
         if role in ("DOB", "DATE"):
             if role == "DOB":
                 self.entities["DOB"] += 1
@@ -844,8 +847,7 @@ class Pipeline:
     def scrub_key(self, k: str, d: DocState, ctx: Ctx) -> str:
         if not isinstance(k, str):
             return k
-        c = ctx if ctx.ident else self.ctx_from_string(k, d)
-        return self.scrub_text(k, c, dates=False, loose=False)
+        return self.scrub_text(k, self.ctx_from_string(k, d), dates=False, loose=False)
 
     def walk_json(self, node, parts, d: DocState, ctx: Ctx):
         if isinstance(node, dict):
@@ -869,7 +871,7 @@ class Pipeline:
         role = self.json_roles.get(sig_join(parts), "KEEP")
         if isinstance(node, (int, float)):
             digs = re.sub(r"\D", "", str(int(node))) if isinstance(node, int) or float(node).is_integer() else ""
-            if role in ("PHONE", "AADHAAR", "ABHA", "HID", "INSID", "PAN") or (len(digs) >= 10 and abs(node) >= 10 ** 9):
+            if role in ("PHONE", "AADHAAR", "ABHA", "HID", "ENCID", "INSID", "PAN") or (len(digs) >= 10 and abs(node) >= 10 ** 9):
                 self.entities[role if role != "KEEP" else "NUMBER"] += 1
                 return 0
             if role == "AGE" and isinstance(node, int) and 0 <= node <= 120:

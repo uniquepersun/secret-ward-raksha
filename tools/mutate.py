@@ -51,7 +51,7 @@ def case_like(src, new):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--kit", required=True); ap.add_argument("--out", required=True); ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--kit", required=True); ap.add_argument("--out", required=True); ap.add_argument("--seed", type=int, default=1); ap.add_argument("--hard", action="store_true", help="also vary text labels and date formats")
     a = ap.parse_args()
     rnd = random.Random(a.seed)
     kit, out = Path(a.kit), Path(a.out)
@@ -93,7 +93,20 @@ def main():
                         phones[e["surface"]] = fmt
     phone_items = sorted(phones.items(), key=lambda kv: -len(kv[0]))
 
+    LABELS = [(r"Patient Name\s*:", "Name of Patient :"), (r"\bMobile:", "Contact Ph.:"), (r"\bAddress:", "Residence:"),
+              (r"\bS/o\b", "Son of"), (r"\bW/o\b", "Wife of"), (r"\bD/o\b", "Daughter of"), (r"नाम:", "मरीज़ का नाम:"),
+              (r"\bAttendant:", "Care-giver:"), (r"\bABHA No:", "Health ID:"), (r"\bUHID:", "MRN:")]
+    MON = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
+    date_rx = re.compile(r"(?<![\d/])(1[3-9]|2\d|3[01])/(0[1-9]|1[0-2])/(\d{4})(?!\d)")
+
+    def hard(s):
+        for pat, new_ in LABELS:
+            s = re.sub(pat, new_, s)
+        return date_rx.sub(lambda m: f"{int(m.group(1))} {MON[int(m.group(2)) - 1]} {m.group(3)}", s)
+
     def mutate_text(s, deva_safe=True):
+        if a.hard:
+            s = hard(s)
         s = name_rx.sub(lambda m: case_like(m.group(1), nmap[m.group(1).lower()]), s)
         s = id_rx.sub(lambda m: idmap[m.group(1)], s)
         for old, new in phone_items:
