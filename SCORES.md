@@ -17,6 +17,8 @@ precision / recall / F0.5 (wrong merges), reid = simulated share of patients re-
 | 8 | scale / stress: 5 mutated copies (240 patients, 1,000 files) | leak 0.0, medical 100, 23 s / 95 MB | | clones across copies (same name, age, village) legitimately merge, so precision is capped by the harness |
 | 9 | fuzzing: empty, binary, NUL, CRLF, BOM, 1,500-deep, 5 MB single line | exit 0, valid contract | | found a crash (text-first run), two quadratic regexes; added guards and a time budget |
 | 10 | index docs cannot bridge; unique pseudonym per cluster; age veto 4 y | link P1.00/R0.91/F0.5 0.99 (0) | hard tier: P1.00/R0.84/F0.5 0.96 (0) | `patient_index.json` listed many patients' ids and merged two clusters; a vetoed merge left two clusters with one id and thus one pseudonym |
+| 11 | red-team round 1: entities, hex, base64 (nested), `\u` escapes, full-width, homoglyphs, lowercase names, split phones, PII in URLs | 7 leaks found and fixed | | decoded views are used when they expose PII; NFKC + homoglyph fold |
+| 12 | red-team round 2: digit words (English / Hindi), letter-spaced names, cue-less names in prose | 28 / 28 adversarial cases | leak 0.0 | caught my own regressions: URL filter deleted by a bad slice, UUID read as Aadhaar, header names; `tools/check_fhir.py` added |
 
 Privacy policy grid (attacker_sim, practice data; raw: reid 0.98, record linkage 0.58):
 

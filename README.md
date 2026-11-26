@@ -14,7 +14,7 @@ standard library. Peak memory ~40 MB and ~4.5 s on the practice set; ~47 s and 1
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt        # setup (network allowed)
 RAKSHA_SECRET=practice .venv/bin/python main.py --input <dir> --output <dir>   # run (no network)
-.venv/bin/python -m unittest discover -s tests                            # 19 tests, ~4 s
+.venv/bin/python -m unittest discover -s tests                            # 21 tests, ~6 s
 ```
 
 `RAKSHA_SECRET` keys the pseudonyms and the per-patient date shifts. It is read from the environment only and is never
@@ -97,6 +97,13 @@ Simulated attacker (`tools/attacker_sim.py`, our approximation of the published 
 data); record-linkage risk 0.07 (0.58 on raw in our sim). Non-PII token retention 98.5 %; intervals exact in all 21 multi-date
 documents. The mutated sets come from `tools/mutate.py`: every name swapped for an unseen one, headers and keys renamed (English,
 Hinglish, Hindi), columns shuffled, phones and ids reformatted, labels and date formats changed, with a matching rewritten truth file.
+
+## Adversarial hardening
+
+Red-teamed with obfuscations the official scorer decodes: HTML entities, %-encoding, `\u` escapes, hex and (nested) base64 inside plain text,
+full-width and look-alike letters, zero-width characters, lowercase and letter-spaced names, numbers spelled as words, phones split
+across lines or inside links. `tests/adversarial_cases.py` (28 cases) and `tests/test_attacks.py` keep them fixed; `tools/check_fhir.py`
+re-validates FHIR after every change.
 
 ## Reliability guards (found by fuzzing, all covered by `tests/test_robustness.py`)
 

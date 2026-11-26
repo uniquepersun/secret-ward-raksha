@@ -943,7 +943,15 @@ class Pipeline:
     def scrub_header(self, h: str, d: DocState) -> str:
         h = clean(h)
         ctx = self.ctx_from_string(h, d)
-        spans = [sp for sp in find_spans(h, self.lx, loose=False) if sp.kind == "ID" or (sp.kind == "NAME" and sp.prio >= 6)]
+        spans = [sp for sp in find_spans(h, self.lx, loose=False) if sp.kind == "ID" or (sp.kind == "NAME" and sp.prio >= 5)]
+        if any(sp.kind == "ID" for sp in spans):
+            # "JJC-5533781 Chakraborty": next to an id, a remaining capitalised non-medical word is a name
+            taken = [(sp.start, sp.end) for sp in spans]
+            for m in re.finditer(r"[A-Z][A-Za-z'\u2019\-]{2,}|[\u0900-\u097F]{3,}", h):
+                if not any(a < m.end() and m.start() < b for a, b in taken) and not lex.known_nonname(m.group(0)) \
+                        and m.group(0).lower() not in lex.STOP_NAME_TOKENS:
+                    spans.append(Span(m.start(), m.end(), "NAME", "patient", 5))
+            spans.sort(key=lambda x: x.start)
         out, pos = [], 0
         for sp in spans:
             out += [h[pos:sp.start], self.placeholder(sp, h[sp.start:sp.end], ctx, False)]
