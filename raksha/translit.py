@@ -3,6 +3,7 @@
 The skeleton makes Mohammad / Mohd. / Md. / मोहम्मद collapse to the same key, which is what
 cross-script name matching and linkage compare. Pure stdlib, deterministic, no model.
 """
+import functools
 import re
 import unicodedata
 
@@ -90,6 +91,7 @@ _DIG = (("chh", "C"), ("sh", "S"), ("ch", "C"), ("kh", "K"), ("gh", "G"), ("th",
         ("bh", "B"), ("jh", "J"), ("ph", "f"), ("ck", "k"))
 
 
+@functools.lru_cache(maxsize=200_000)
 def skeleton(token: str) -> str:
     """Phonetic consonant skeleton of one name token (Latin or Devanagari)."""
     t = ascii_digits(token)

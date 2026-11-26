@@ -593,7 +593,7 @@ class Pipeline:
                 for u in d.units:
                     row = d.rows[u.node]
                     pairs = [(d.roles[j], row[j]) for j in range(min(len(row), len(d.roles)))]
-                    u.ev = self._ev_from_pairs(pairs, order)
+                    u.ev = self._ev_from_pairs(pairs, order, d.rel)
                     self._ev_from_text(u.ev, " ".join(row[j] for j in range(len(row)) if j < len(d.roles) and d.roles[j] in ("TEXT", "ADDRESS")), skip_names=True)
             elif d.kind == "json":
                 for u in d.units:
@@ -607,7 +607,7 @@ class Pipeline:
                             pairs.append((role, sv))
                         if isinstance(v, str) and role in ("TEXT", "ADDRESS", "KEEP") and " " in v:
                             texts.append(v)
-                    ev = self._ev_from_pairs(pairs, order)
+                    ev = self._ev_from_pairs(pairs, order, d.rel)
                     texts += self._kv_texts(u.node)
                     for (role, _), toks in sorted(groups.items(), key=lambda kv: str(kv[0])):
                         toks = [t for t in toks if not _DR.match(t)]
@@ -620,7 +620,7 @@ class Pipeline:
                 d.units[0].ev = Ev()
                 self._ev_from_text(d.units[0].ev, d.text, skip_names=False)
 
-    def _ev_from_pairs(self, pairs, order) -> Ev:
+    def _ev_from_pairs(self, pairs, order, scope: str = "") -> Ev:
         ev = Ev()
         namebuf = {"NAME": [], "RELNAME": []}
         for role, v in pairs:
@@ -629,6 +629,8 @@ class Pipeline:
                 continue
             if role == "HID" or role == "INSID":
                 n = norm_id(v)
+                if role == "HID" and 2 <= len(n) < 5 and scope:
+                    ev.ids.add(f"{scope}#{n}")           # short ids (P1001) link rows within one file only
                 if len(n) >= 5:
                     (ev.ids.add(n) if role == "HID" else ev.strong.add(("INSID", n)))
                     c = id_core(n)
@@ -1150,6 +1152,8 @@ class Pipeline:
             return [self.walk_json(x, parts, d, ctx) for x in node]
         if isinstance(node, bool) or node is None:
             return node
+        if parts and str(parts[-1]).split("<")[0] == "resourceType":
+            return node                                  # structural: a FHIR resource type is never PII
         role = self.json_roles.get(sig_join(parts), "KEEP")
         if isinstance(node, (int, float)):
             digs = re.sub(r"\D", "", str(int(node))) if isinstance(node, int) or float(node).is_integer() else ""
@@ -1303,7 +1307,6 @@ class Pipeline:
                 continue
             for u in d.units:
                 info = self.cl_info.get(u.cluster)
-                if not info or not info["ident"]:
-                    continue
-                recs.append({"file": f"sanitized/{d.out_rel}", "loc": u.loc, "patient": info["psn"]})
+                psn = info["psn"] if info and info["ident"] else None      # null = deliberately not linked (allowed by the spec)
+                recs.append({"file": f"sanitized/{d.out_rel}", "loc": u.loc, "patient": psn})
         return recs

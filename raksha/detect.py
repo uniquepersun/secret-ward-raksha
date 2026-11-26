@@ -107,6 +107,8 @@ _TEHSIL_CUE = _tc(rf"(?i)(?<![\w])(?:tehsil|tahsil|taluk|block|तहसील)\
 _VILLAGE_CUE = _tc(rf"(?i)(?<![\w])(?:village|vill\.?|gram|gaon|gaanv|grm|ग्राम|गाँव|गांव|मौजा)\s*(?:[:\-.]\s*)?({SEQ_STRONG})")
 _PIN = _tc(r"(?i)(?:pin\s*(?:code)?|postal\s*code|पिन(?:\s*कोड)?)\s*(?:[:\-]\s*)?([1-9]\d{5})(?!\d)|"
                   r"(?:(?<=[A-Za-z\u0900-\u097F\)])\s*[\-,]\s*)([1-9]\d{5})(?!\d)")
+_NEXTWORD = _tc(r"[ \t]+(\p{L}+)")
+_PLACE_PIN = _tc(r"(?<![\w.,])(\p{Lu}[\p{L}]{2,})\s+([1-8]\d{5})(?![\d.,]|\s*(?:mg|ml|g|kg|iu|/|%|cells|per|x10|u/l|/ul))")
 _BARE_PIN = _tc(r"(?<![\d.])[1-9]\d{5}(?![\d.]|\s*(?:mg|ml|g|kg|iu|%))")
 
 # ---------------------------------------------------------------- name cues
@@ -187,6 +189,7 @@ class Lexicon:
         self.name_skels: dict[str, str] = {}      # skeleton -> role
         self.generic_skels = {lex_skel for lex_skel in (skeleton(w) for w in lex.GENERIC_NAME_PARTS) if lex_skel}
         self.doctor_tokens: set[str] = set()
+        self.skel_tokens: dict[str, set] = {}      # skeleton -> learned latin tokens (fast fuzzy check)
         self.village_phr: set[tuple[str, ...]] = set()   # tuples of skeleton tokens
         self.village_skels: set[str] = set()
         self.ids: set[str] = set()                # normalised alnum ids
@@ -208,6 +211,7 @@ class Lexicon:
                 continue
             self.name_tokens.setdefault(tl, role)
             sk = skeleton(t)
+            self.skel_tokens.setdefault(sk, set()).add(tl)
             if len(sk) >= 2 and sk not in self.generic_skels and t.casefold() not in lex.GENERIC_NAME_PARTS:
                 self.name_skels.setdefault(sk, role)
 
@@ -404,6 +408,9 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
         add(m.start(), m.end(), "ADDR", "LOCALITY", 3)
     for m in _LANDMARK.finditer(text):
         add(m.start(), m.end(), "ADDR", "LANDMARK", 3)
+    for m in _PLACE_PIN.finditer(v):            # "Pune 411001": a 6-digit PIN right after a place name
+        if not lex.known_nonname(m.group(1)):
+            add(m.start(2), m.end(2), "PIN", "PIN", 3)
     for m in _PIN.finditer(v):
         g = 1 if m.group(1) else 2
         add(m.start(g), m.end(g), "PIN", "PIN", 3)
@@ -487,7 +494,7 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
             elif len(t) >= 4:
                 sk = skeleton(t)
                 if len(sk) >= 2 and sk in lx.name_skels and any(
-                        JaroWinkler.similarity(tl, k) >= 0.8 for k in lx.name_tokens if k[:1] == tl[:1] and skeleton(k) == sk):
+                        JaroWinkler.similarity(tl, k) >= 0.8 for k in lx.skel_tokens.get(sk, ()) if k[:1] == tl[:1]):
                     hit = lx.name_skels[sk]
         if hit and not _is_doctor_context(text, m.start()):
             add(m.start(), end, "NAME", hit, 6)
@@ -529,6 +536,9 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
             runs.append(run)
         for r in runs:
             if len(r) < 2 or _is_doctor_context(text, r[0][0]):
+                continue
+            nxt = _NEXTWORD.match(text[r[-1][1]:r[-1][1] + 24])
+            if nxt and nxt.group(1).casefold() in lex.HOSPITAL_WORDS:      # "Lotus Care Hospital": an organisation, not a person
                 continue
             seq = text[r[0][0]:r[-1][1]]
             seed = sum(t.lower() in lex.SEED_GIVEN or t.lower() in lex.SEED_SURNAME for _, _, t in r)

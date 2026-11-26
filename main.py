@@ -67,6 +67,9 @@ def main() -> int:
     from raksha.pipeline import Pipeline  # imported late so the hook covers import errors
 
     secret = os.environ.get("RAKSHA_SECRET", "").encode()
+    if not secret:                       # an empty key would make pseudonyms predictable; use a random per-run key instead
+        secret = os.urandom(32)
+        sys.stderr.write("warning: RAKSHA_SECRET is not set; using a random key (output is not reproducible)\n")
     policy = load_policy(Path(a.policy))
     inp, out = Path(a.input), Path(a.output)
     out.mkdir(parents=True, exist_ok=True)
