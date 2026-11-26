@@ -37,6 +37,7 @@ class Unit:
     loc: str
     ev: Ev = field(default_factory=Ev)
     node: Any = None            # json subtree / csv row index
+    base: tuple = ()            # key path of the container (JSON), so role signatures match
     cluster: int = -1
 
 
@@ -253,7 +254,7 @@ class Pipeline:
         elif isinstance(data, dict) and data.get("resourceType") != "Bundle":
             for k, v in data.items():
                 if isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
-                    d.units += [Unit(f"/{pointer_escape(k)}/{i}", node=x) for i, x in enumerate(v)]
+                    d.units += [Unit(f"/{pointer_escape(k)}/{i}", node=x, base=(k,)) for i, x in enumerate(v)]
         if not d.units:
             d.units = [Unit("doc", node=data)]
 
@@ -485,7 +486,7 @@ class Pipeline:
             elif d.kind == "json":
                 for u in d.units:
                     pairs, texts, groups = [], [], defaultdict(list)
-                    for parts, key, v in self._iter_json(u.node):
+                    for parts, key, v in self._iter_json(u.node, u.base):
                         role = self.json_roles.get(sig_join(parts), "KEEP")
                         sv = str(v)
                         if role in ("NAME", "RELNAME"):
@@ -916,7 +917,7 @@ class Pipeline:
         def rec(node, parts, ctx):
             u = by_id.get(id(node))
             if u is not None:
-                return self.walk_json(node, parts, d, self.ctx_for(d, u))
+                return self.walk_json(node, u.base, d, self.ctx_for(d, u))
             if isinstance(node, dict):
                 out, seen = {}, set()
                 for k, v in node.items():

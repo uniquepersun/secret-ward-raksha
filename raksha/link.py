@@ -198,7 +198,7 @@ class Linker:
                 return False
         same_village = bool(ea.village and eb.village and ea.village == eb.village)
         diff_village = bool(ea.village and eb.village and ea.village != eb.village)
-        age_ok = ea.age is not None and eb.age is not None and abs(ea.age - eb.age) <= 1
+        age_ok = ea.age is not None and eb.age is not None and abs(ea.age - eb.age) <= 2
         age_bad = ea.age is not None and eb.age is not None and abs(ea.age - eb.age) > 1
         if rel_ok is False and (diff_village or age_bad):
             return False        # homonyms: same name, different relative and place/age
