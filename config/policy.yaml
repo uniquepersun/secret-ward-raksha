@@ -1,0 +1,4 @@
+# Your privacy rules. main.py reads simple "key: value" lines.
+age_band_years: 5          # ages become bands like 45-49 (the band must contain the true age)
+date_shift_max_days: 180   # every date of one patient moves by the same secret offset
+min_group_size: 5          # TODO: suppress or widen quasi-identifier combos rarer than this (k-anonymity)

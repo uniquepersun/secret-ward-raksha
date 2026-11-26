@@ -1,0 +1,4 @@
+[submission]
+name  = "your-team-name"
+setup = "pip install -r requirements.txt"                    # run once, internet allowed
+run   = "python main.py --input {input} --output {output}"   # run with NO internet
