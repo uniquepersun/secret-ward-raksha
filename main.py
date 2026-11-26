@@ -56,12 +56,18 @@ def main() -> int:
     sys.setrecursionlimit(3000)
 
     p = Pipeline(inp, out, secret, policy)
-    p.load_all()
-    p.learn()
-    p.build_evidence()
-    p.link()
-    p.write_all()
-    recs = p.records()
+    try:
+        p.load_all()
+        p.learn()
+        p.build_evidence()
+        p.link()
+        p.write_all()
+        recs = p.records()
+    except Exception:  # noqa: BLE001 - last resort: never crash, never copy raw; quarantine what was not written
+        for d in p.docs:
+            if not d.out_rel:
+                d.status, d.reason = "quarantined", "pipeline_error"
+        recs = [r for r in (p.records() if any(d.out_rel for d in p.docs) else [])]
 
     with open(out / "records.jsonl", "w", encoding="utf-8") as f:
         for r in recs:

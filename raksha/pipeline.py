@@ -175,6 +175,11 @@ class Pipeline:
         self.id_cluster: dict[str, int] = {}
         self.name_cluster: dict[frozenset, set] = defaultdict(set)
         self.age_max = int(policy.get("date_shift_max_days", 180))
+        self.t0 = time.monotonic()
+        self.budget = float(policy.get("time_budget_s", 540))   # leave margin under the 15-minute limit
+
+    def over_budget(self) -> bool:
+        return time.monotonic() - self.t0 > self.budget
 
     # =========================================================================== load
     def load_all(self):
@@ -476,6 +481,16 @@ class Pipeline:
         for d in self.docs:
             if d.status != "sanitized":
                 continue
+            if self.over_budget():
+                d.status, d.reason = "quarantined", "time_budget_exceeded"
+                continue
+            try:
+                self._evidence_for(d)
+            except Exception:  # noqa: BLE001 - one odd file must never stop the run; it is quarantined
+                d.status, d.reason = "quarantined", "processing_error"
+
+    def _evidence_for(self, d: DocState):
+        if True:
             order = d.order or self.global_order
             if d.kind == "csv":
                 for u in d.units:
@@ -504,7 +519,7 @@ class Pipeline:
                     u.ev = ev
                     self._ev_from_text(ev, "\n".join(texts), skip_names=False)
             else:
-                u.ev = Ev()
+                d.units[0].ev = Ev()
                 self._ev_from_text(d.units[0].ev, d.text, skip_names=False)
 
     def _ev_from_pairs(self, pairs, order) -> Ev:
@@ -630,7 +645,10 @@ class Pipeline:
     def link(self):
         units = [(d, u) for d in self.docs if d.status == "sanitized" for u in d.units]
         evs = [u.ev for _, u in units]
-        roots = Linker(evs).run() if evs else []
+        try:
+            roots = Linker(evs).run() if evs else []
+        except Exception:  # noqa: BLE001 - fall back to "link nothing" (a wrong link costs more than none)
+            roots = list(range(len(evs)))
         members = defaultdict(list)
         for i, r in enumerate(roots):
             members[r].append(i)
@@ -973,6 +991,9 @@ class Pipeline:
         taken: set = set()
         for d in self.docs:
             if d.status != "sanitized":
+                continue
+            if self.over_budget():
+                d.status, d.reason, d.out_rel = "quarantined", "time_budget_exceeded", None
                 continue
             try:
                 if d.kind == "csv":

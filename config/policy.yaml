@@ -7,3 +7,4 @@ date_shift_max_days: 180   # every date of one patient moves by the same secret 
 tehsil_level: 0            # 1 keeps the tehsil, 0 generalises location to district only
 pin_digits: 0              # digits of the PIN code kept (6-digit PINs are always removed); 0 drops it
 min_group_size: 5          # reserved for rare-combination suppression
+time_budget_s: 540      # past this the remaining files are quarantined (reason time_budget_exceeded) so the run always finishes

@@ -24,7 +24,7 @@ F = rx.IGNORECASE | rx.UNICODE | rx.MULTILINE
 # ---------------------------------------------------------------- identifiers (digit view)
 _RUN = rx.compile(r"(?<![\w])\+?\(?\d(?:\)?[ \-.]{0,2}\d){5,}(?![\w])")
 _MASKED = rx.compile(r"(?<![\w])(?:[Xx*•#]{2,4}[\s\-]?){2}\d{4}(?!\d)|(?<![\w])[Xx*•]{4}[\s-]?[Xx*•]{4}[\s-]?[Xx*•\d]{4}")
-_EMAIL = rx.compile(r"[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+|(?<![\w])[\w.\-]{3,}@(?:abdm|sbx|ndhm|abha)\b", rx.I)
+_EMAIL = rx.compile(r"(?<![\w.+\-])[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+|(?<![\w])[\w.\-]{3,}@(?:abdm|sbx|ndhm|abha)\b", rx.I)
 _PAN = rx.compile(r"(?<![A-Za-z0-9])[A-Z]{5}\d{4}[A-Z](?![A-Za-z0-9])")
 _ALNUM_ID = rx.compile(r"(?<![\w/\-])(?=[A-Za-z0-9/\-]*\d)[A-Za-z]{2,6}(?:[\-/][A-Za-z0-9]{1,10}){1,4}(?![\w])|"
                        r"(?<![\w])[A-Za-z]{2,5}\d{4,}[A-Za-z0-9]*(?![\w])")
@@ -46,7 +46,7 @@ _LOCALITY = rx.compile(rf"(?i)(?<![\w])(?:(?<=,\s*)ward\s*(?:no\.?)?\s*\d+(?!\s*
                        rf"वार्ड\s*(?:नं\.?)?\s*\d+|कॉलोनी\s+{TOK}(?:\s+{TOK}){{0,2}})")
 _LANDMARK = rx.compile(rf"(?i)(?<![\w])(?:near|opp(?:osite)?\.?|behind|beside|adjacent\s+to|next\s+to|nr\.?)\s+"
                        rf"(?:{TITLE_TOK}(?:\s+{TITLE_TOK}){{0,3}})|"
-                       rf"(?:{L}+(?:\s+{L}+){{0,3}})\s+(?:के\s+)?(?:पास|पीछे|सामने|बगल)")
+                       rf"(?<![\w\p{{M}}])(?:{L}+(?:\s+{L}+){{0,3}})\s+(?:के\s+)?(?:पास|पीछे|सामने|बगल)")
 _TEHSIL_CUE = rx.compile(rf"(?i)(?<![\w])(?:tehsil|tahsil|taluk|block|तहसील)\s*[:\-.]?\s*({SEQ_STRONG})")
 _VILLAGE_CUE = rx.compile(rf"(?i)(?<![\w])(?:village|vill\.?|gram|gaon|gaanv|grm|ग्राम|गाँव|गांव|मौजा)\s*[:\-.]?\s*({SEQ_STRONG})")
 _PIN = rx.compile(r"(?i)(?:pin\s*(?:code)?|postal\s*code|पिन(?:\s*कोड)?)\s*[:\-]?\s*([1-9]\d{5})(?!\d)|"
@@ -233,7 +233,31 @@ def _is_doctor_context(text: str, pos: int) -> bool:
     return bool(_DOCTOR_BEFORE.search(text[max(0, pos - 14):pos]))
 
 
+_LONGRUN = rx.compile(r"\S{300,}")
+CHUNK = 100_000
+
+
 def find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> list[Span]:
+    """Detect PII in one string (linear-time guards): non-space runs over 300 chars are never words or
+    identifiers, so they are masked before scanning; very large texts are scanned in line-aligned chunks."""
+    if not text or not text.strip():
+        return []
+    masked = _LONGRUN.sub(lambda m: "\x00" * len(m.group(0)), text)
+    if len(masked) <= CHUNK:
+        return _find_spans(masked, lx, hint, loose)
+    out, pos = [], 0
+    while pos < len(masked):
+        end = min(len(masked), pos + CHUNK)
+        if end < len(masked):
+            nl = masked.rfind("\n", pos, end)
+            end = nl + 1 if nl > pos else end
+        for sp in _find_spans(masked[pos:end], lx, hint, loose):
+            out.append(Span(sp.start + pos, sp.end + pos, sp.kind, sp.role, sp.prio))
+        pos = end
+    return out
+
+
+def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> list[Span]:
     """Detect PII in one string. `hint` is a field-role hint ('' for free text)."""
     if not text or not text.strip():
         return []
