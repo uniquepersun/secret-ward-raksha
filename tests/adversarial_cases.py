@@ -24,11 +24,14 @@ CASES = [
  ("Visitor: Gurdev Singh Sandhu entered at 17:40", ["Gurdev Singh Sandhu"], ["17:40"]),
  ("Caller Ananya Bose reported fall, ward 3 bed 7", ["Ananya Bose"], ["ward 3 bed 7"]),
  ("Guardian: Tabassum Khatoon, Mohalla Chowk, near Jama Masjid, PIN 226003", ["Tabassum Khatoon", "Chowk", "Jama Masjid", "226003"], []),
+ ("shahid sahab ka BP theek hai, dawa de di", ["shahid"], ["BP theek hai"]),
+ ("Born 12 अप्रैल 1977, admitted 3 मई 2026", ["12 अप्रैल 1977", "3 मई 2026"], []),
  ("Insurance PMJAY-UP-5521908834 policy POL/21/99887766 claim BL/26/00123", ["5521908834", "99887766", "BL/26/00123"], []),
 ]
 
 def main():
     lx = Lexicon()
+    lx.add_name("Shahid Khan")      # lowercase "shahid sahab" must still be caught once the name is known
     bad = 0
     for text, gone, stay in CASES:
         out, pos = [], 0
@@ -36,6 +39,8 @@ def main():
             out += [text[pos:s.start], "#" * (s.end - s.start)]
             pos = s.end
         res = "".join(out) + text[pos:]
+        from raksha.privacy import shift_text_dates
+        res, _ = shift_text_dates(res, 37, "dmy")
         miss = [g for g in gone if g in res]
         lost = [k for k in stay if k not in res]
         if miss or lost:

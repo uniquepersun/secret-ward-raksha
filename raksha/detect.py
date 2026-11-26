@@ -390,7 +390,9 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
             if len(sk) >= 2 and (sk in lx.name_skels):
                 hit = lx.name_skels[sk]
         else:
-            if not (t[:1].isupper()) or lex.known_nonname(t) or tl in lex.STOP_NAME_TOKENS:
+            nxt = toks_all[ti + 1].group(0).casefold() if ti + 1 < len(toks_all) else ""
+            lower_ok = (not t[:1].isupper()) and tl in lx.name_tokens and nxt in lex.HONORIFIC_POST and len(t) >= 3
+            if (not (t[:1].isupper()) and not lower_ok) or lex.known_nonname(t) or tl in lex.STOP_NAME_TOKENS:
                 continue
             if t == "ASHA" and ti + 1 < len(toks_all) and toks_all[ti + 1].group(0).lower() in ("worker", "workers", "didi", "sahayika", "program", "scheme", "visit", "kiran"):
                 continue

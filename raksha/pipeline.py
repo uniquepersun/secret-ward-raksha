@@ -489,7 +489,30 @@ class Pipeline:
             except Exception:  # noqa: BLE001 - one odd file must never stop the run; it is quarantined
                 d.status, d.reason = "quarantined", "processing_error"
 
+    @staticmethod
+    def _plausible(ev: Ev) -> Ev:
+        """One record = one patient. A record listing many patients (an index, a ward sheet, a roster) must not
+        bridge their clusters, so evidence that no single patient could own is dropped for linking."""
+        if len(ev.ids) >= 4:
+            ev.ids, ev.cores = set(), set()
+        by_type = Counter(t for t, _ in ev.strong)
+        for typ in ("AADHAAR", "ABHA", "PAN"):
+            if by_type[typ] > 1:
+                ev.strong = {x for x in ev.strong if x[0] != typ}
+        if len(ev.phones) > 3:
+            ev.phones = set()
+        if len(ev.names) > 5:
+            ev.names, ev.rels = [], []
+        return ev
+
     def _evidence_for(self, d: DocState):
+        try:
+            self._evidence_raw(d)
+        finally:
+            for u in d.units:
+                u.ev = self._plausible(u.ev)
+
+    def _evidence_raw(self, d: DocState):
         if True:
             order = d.order or self.global_order
             if d.kind == "csv":
@@ -652,6 +675,18 @@ class Pipeline:
         members = defaultdict(list)
         for i, r in enumerate(roots):
             members[r].append(i)
+        # pass 1: cluster keys (strongest identifier, else the first unit's path)
+        keys = {}
+        for r, idx in sorted(members.items()):
+            ids = set().union(*(evs[i].ids for i in idx))
+            strong = set().union(*({s for s in evs[i].strong if s[0] in ("AADHAAR", "ABHA", "PAN", "EMAIL")} for i in idx))
+            i0 = min(idx, key=lambda i: (units[i][0].rel, units[i][1].loc))
+            first = f"{units[i0][0].rel}|{units[i0][1].loc}"
+            cand = sorted(ids) + sorted(f"{a}:{b}" for a, b in strong)
+            keys[r] = (cand[0] if cand else first, first)
+        # two clusters can share an id when a conflict vetoed their merge: they are different people, so
+        # their pseudonyms must differ (a shared pseudonym would be a false merge)
+        count = Counter(k for k, _ in keys.values())
         for r, idx in sorted(members.items()):
             ids, strong, names, cores = set(), set(), [], set()
             for i in idx:
@@ -661,12 +696,9 @@ class Pipeline:
                 strong |= {s for s in e.strong if s[0] in ("AADHAAR", "ABHA", "PAN", "EMAIL")}
                 names += e.names
             ident = any(evs[i].has_identity for i in idx)
-            keys = sorted(ids) + sorted(f"{a}:{b}" for a, b in strong)
-            if keys:
-                key = keys[0]
-            else:
-                i0 = min(idx, key=lambda i: (units[i][0].rel, units[i][1].loc))
-                key = f"{units[i0][0].rel}|{units[i0][1].loc}"
+            key, first = keys[r]
+            if count[key] > 1:
+                key = f"{key}#{first}"
             skels = frozenset(s for nm in names for s in nm if s not in self.lx.generic_skels) or frozenset(s for nm in names for s in nm)
             # records that carry a phone / id fragment but no patient identity still get their dates shifted
             weak = any(evs[i].phones or evs[i].cores for i in idx)
@@ -871,8 +903,32 @@ class Pipeline:
             return k
         return self.scrub_text(k, self.ctx_from_string(k, d), dates=False, loose=False)
 
+    LABEL_KEYS = ("field", "key", "label", "attribute", "attr", "question", "prompt", "fieldname", "field_name")
+    VALUE_KEYS = ("value", "val", "answer", "response", "data", "text")
+
+    def _kv_pair(self, node: dict):
+        """{"field": "Patient Name", "value": "..."}: the sibling label decides how the value is read."""
+        if len(node) > 4:
+            return None
+        lk = [k for k in node if k.lower() in self.LABEL_KEYS and isinstance(node[k], str)]
+        vk = [k for k in node if k.lower() in self.VALUE_KEYS and isinstance(node[k], str)]
+        return (lk[0], vk[0]) if len(lk) == 1 and len(vk) == 1 else None
+
     def walk_json(self, node, parts, d: DocState, ctx: Ctx):
         if isinstance(node, dict):
+            kv = self._kv_pair(node)
+            if kv is not None:
+                label, val = node[kv[0]], node[kv[1]]
+                text = f"{label}: {val}"
+                res = self.scrub_text(text, ctx)
+                if res.startswith(f"{label}: "):
+                    node = dict(node)
+                    node[kv[1]] = res[len(label) + 2:]
+                    node[kv[0]] = label
+                    out = {}
+                    for k, v in node.items():
+                        out[self.scrub_key(k, d, ctx)] = v if k in kv else self.walk_json(v, parts + (k,), d, ctx)
+                    return out
             rt = node.get("resourceType")
             out, seen = {}, set()
             for k, v in node.items():

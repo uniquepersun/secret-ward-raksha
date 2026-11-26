@@ -49,6 +49,11 @@ _WRITTEN = rx.compile(r"(?i)(?<![\d\w])(\d{1,2})(?:st|nd|rd|th)?[\s\-]+(jan|feb|
 _WRITTEN2 = rx.compile(r"(?i)(?<![\w])(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})(?![\d])")
 
 
+HI_MONTHS = {"जनवरी": 1, "फरवरी": 2, "फ़रवरी": 2, "मार्च": 3, "अप्रैल": 4, "अप्रेल": 4, "मई": 5, "जून": 6, "जुलाई": 7, "अगस्त": 8,
+             "सितंबर": 9, "सितम्बर": 9, "अक्टूबर": 10, "अक्तूबर": 10, "नवंबर": 11, "नवम्बर": 11, "दिसंबर": 12, "दिसम्बर": 12}
+_HINDI = rx.compile(r"(?<![\d\w])(\d{1,2})\s+(" + "|".join(sorted(map(rx.escape, HI_MONTHS), key=len, reverse=True)) + r")\s+(\d{4})(?![\d])")
+
+
 def _safe(y, m, d):
     try:
         return dt.date(y, m, d)
@@ -128,6 +133,13 @@ def shift_text_dates(text: str, days: int, order: str = "dmy") -> tuple[str, int
             continue
         n = d + dt.timedelta(days=days)
         add(m, f"{mon_names[n.month - 1]} {n.day}, {n.year}")
+    inv = {v: k for k, v in reversed(list(HI_MONTHS.items()))}
+    for m in _HINDI.finditer(t):
+        d = _safe(int(m.group(3)), HI_MONTHS[m.group(2)], int(m.group(1)))
+        if d is None:
+            continue
+        n = d + dt.timedelta(days=days)
+        add(m, f"{n.day} {inv[n.month]} {n.year}")
     if not edits:
         return text, 0
     edits.sort(key=lambda e: (e[0], -(e[1] - e[0])))

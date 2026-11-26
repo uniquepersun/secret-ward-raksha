@@ -126,5 +126,23 @@ class Linkage(unittest.TestCase):
         self.assertNotEqual(roots[0], roots[1])
 
 
+class IndexDocuments(unittest.TestCase):
+    def test_list_record_cannot_bridge_patients(self):
+        from raksha.pipeline import Pipeline
+        index = Ev(ids={"JJC1", "JJC2", "JJC3", "JJC4", "JJC5"}, cores={"11111", "22222"})
+        a = Ev(ids={"JJC1"}, names=[name_set(["Asha", "Rao"])])
+        b = Ev(ids={"JJC2"}, names=[name_set(["Ravi", "Menon"])])
+        evs = [a, b, Pipeline._plausible(index)]
+        roots = Linker(evs).run()
+        self.assertNotEqual(roots[0], roots[1])          # two different patients stay apart
+        self.assertEqual(evs[2].ids, set())              # the index owns no identity
+
+    def test_two_aadhaar_numbers_in_one_record_are_dropped(self):
+        from raksha.pipeline import Pipeline
+        e = Ev(strong={("AADHAAR", "111122223333"), ("AADHAAR", "444455556666"), ("PAN", "ABCDE1234F")})
+        e = Pipeline._plausible(e)
+        self.assertEqual({t for t, _ in e.strong}, {"PAN"})
+
+
 if __name__ == "__main__":
     unittest.main()

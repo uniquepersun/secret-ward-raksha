@@ -91,7 +91,7 @@ class Linker:
         if A["sex"] and B["sex"] and A["sex"] | B["sex"] != A["sex"] and len(A["sex"] | B["sex"]) > 1:
             return True
         ages = A["age"] + B["age"]
-        if ages and max(ages) - min(ages) > 2:
+        if ages and max(ages) - min(ages) > 4:       # recorded ages drift up to ~2 y per record
             return True
         if A["dob"] and B["dob"] and (A["dob"] | B["dob"]) != A["dob"] and len(A["dob"] | B["dob"]) > 1:
             return True
