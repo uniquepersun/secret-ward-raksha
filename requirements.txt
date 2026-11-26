@@ -1,6 +1,4 @@
-# The starter uses only the Python standard library.
-# Add what you need, for example:
-# rapidfuzz
-# jellyfish
-# indic-transliteration
-# cryptography
+# Pinned runtime dependencies (no model weights, no network at run time). Everything else is the standard library.
+regex==2026.11.25            # Unicode-aware patterns for Devanagari (\p{L}\p{M})
+rapidfuzz==3.14.6            # Jaro-Winkler for fuzzy name-token matching in linkage
+charset-normalizer==3.5.3    # fallback encoding detection for legacy exports

@@ -1,4 +1,4 @@
 [submission]
-name  = "your-team-name"
-setup = "pip install -r requirements.txt"                    # run once, internet allowed
-run   = "python main.py --input {input} --output {output}"   # run with NO internet
+name  = "team-secret-ward"
+setup = "python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
+run   = ".venv/bin/python main.py --input {input} --output {output}"
