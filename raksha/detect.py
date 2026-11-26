@@ -22,7 +22,7 @@ SEQ_TITLE = rf"{TITLE_TOK}(?:[ \t]{{1,2}}{TITLE_TOK}){{0,3}}"
 F = rx.IGNORECASE | rx.UNICODE | rx.MULTILINE
 
 # ---------------------------------------------------------------- identifiers (digit view)
-_RUN = rx.compile(r"(?<![\w])\+?\(?\d(?:[ \-.()]?\d){5,}(?![\w])")
+_RUN = rx.compile(r"(?<![\w])\+?\(?\d(?:\)?[ \-.]{0,2}\d){5,}(?![\w])")
 _MASKED = rx.compile(r"(?<![\w])(?:[Xx*•#]{2,4}[\s\-]?){2}\d{4}(?!\d)|(?<![\w])[Xx*•]{4}[\s-]?[Xx*•]{4}[\s-]?[Xx*•\d]{4}")
 _EMAIL = rx.compile(r"[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+|(?<![\w])[\w.\-]{3,}@(?:abdm|sbx|ndhm|abha)\b", rx.I)
 _PAN = rx.compile(r"(?<![A-Za-z0-9])[A-Z]{5}\d{4}[A-Z](?![A-Za-z0-9])")
@@ -130,6 +130,7 @@ class Lexicon:
         self.id_cores: set[str] = set()           # digit cores >=5
         self.phones: set[str] = set()
         self.pins: set[str] = set()
+        self.places: set[str] = set()             # casefolded district / tehsil names (kept, never villages)
         self.df: dict[str, int] = {}              # Title-Case sequence -> number of files
         self.dev_common = DEV_COMMON
 
@@ -151,6 +152,11 @@ class Lexicon:
         toks = tuple(skeleton(t) for t in _TOKEN.findall(value or "") if skeleton(t))
         if toks:
             self.village_phr.add(toks)
+
+    def add_place(self, value: str):
+        v = (value or "").strip().casefold()
+        if v:
+            self.places.add(v)
 
     def add_id(self, value: str):
         v = ascii_digits(value or "")

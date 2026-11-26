@@ -285,6 +285,42 @@ class Pipeline:
         for sig, vs in vals.items():
             self.json_roles[sig] = infer_role(sig, vs, known or None)
 
+    # =========================================================================== place columns
+    ADDR_SIBLINGS = {"PIN", "ADDRESS", "TEHSIL", "DISTRICT"}
+
+    def _place_like(self, vals: list) -> str | None:
+        """'VILLAGE' / 'KEEP' for an unlabelled name-shaped column inside an address block."""
+        sv = [str(v).strip() for v in vals if v is not None and str(v).strip()][:400]
+        if not sv or sum(is_namey(v) for v in sv) / len(sv) < 0.6:
+            return None
+        known = sum(v.casefold() in self.lx.places for v in sv) / len(sv)
+        return "KEEP" if known >= 0.6 else "VILLAGE"
+
+    def _infer_places_csv(self, d: DocState):
+        if not (self.ADDR_SIBLINGS & set(d.roles)):
+            return
+        for j, role in enumerate(d.roles):
+            if role == "KEEP":
+                r = self._place_like([row[j] for row in d.rows if j < len(row)])
+                if r == "VILLAGE":
+                    d.roles[j] = "VILLAGE"
+
+    def _infer_places_json(self):
+        kids = defaultdict(set)
+        for sig, role in self.json_roles.items():
+            kids[sig.rsplit(" ", 1)[0] if " " in sig else ""].add(role)
+        vals = defaultdict(list)
+        for d in self.docs:
+            if d.kind == "json" and d.status == "sanitized":
+                for parts, key, v in self._iter_json(d.data):
+                    sg = sig_join(parts)
+                    if self.json_roles.get(sg) == "KEEP" and isinstance(v, str):
+                        vals[sg].append(v)
+        for sig, vs in vals.items():
+            parent = sig.rsplit(" ", 1)[0] if " " in sig else ""
+            if self.ADDR_SIBLINGS & kids.get(parent, set()) and self._place_like(vs) == "VILLAGE":
+                self.json_roles[sig] = "VILLAGE"
+
     # =========================================================================== learning
     def learn(self):
         # 1) CSV columns
@@ -298,7 +334,12 @@ class Pipeline:
                     vals = [r[j] for r in d.rows if j < len(r)]
                     d.roles.append(infer_role(h, vals, known))
                 self._learn_table(d)
+            for d in self.docs:
+                if d.kind == "csv" and d.status == "sanitized":
+                    self._infer_places_csv(d)
+                    self._learn_table(d)
             self.learn_json_roles()
+            self._infer_places_json()
             for d in self.docs:
                 if d.kind == "json" and d.status == "sanitized":
                     self._learn_json(d)
@@ -352,10 +393,12 @@ class Pipeline:
                     self.lx.phones.add(p)
         elif role == "PIN":
             self.lx.pins.add(ascii_digits(v).strip())
+        elif role in ("TEHSIL", "DISTRICT"):
+            self.lx.add_place(v)
 
     def _learn_table(self, d: DocState):
         for j, role in enumerate(d.roles):
-            if role in ("NAME", "RELNAME", "VILLAGE", "HID", "INSID", "AADHAAR", "ABHA", "PAN", "PHONE", "EMAIL", "PIN"):
+            if role in ("NAME", "RELNAME", "VILLAGE", "HID", "INSID", "AADHAAR", "ABHA", "PAN", "PHONE", "EMAIL", "PIN", "TEHSIL", "DISTRICT"):
                 for r in d.rows:
                     if j < len(r):
                         self._learn_value(role, r[j])
@@ -364,7 +407,7 @@ class Pipeline:
     def _learn_json(self, d: DocState):
         for parts, key, v in self._iter_json(d.data):
             role = self.json_roles.get(sig_join(parts), "KEEP")
-            if role in ("NAME", "RELNAME", "VILLAGE", "HID", "INSID", "AADHAAR", "ABHA", "PAN", "PHONE", "EMAIL", "PIN"):
+            if role in ("NAME", "RELNAME", "VILLAGE", "HID", "INSID", "AADHAAR", "ABHA", "PAN", "PHONE", "EMAIL", "PIN", "TEHSIL", "DISTRICT"):
                 self._learn_value(role, str(v))
         # keys that look like ids / names (dicts keyed by patient)
         def keys(node):
@@ -389,6 +432,8 @@ class Pipeline:
                 self.lx.add_village(text[s.start:s.end])
             elif s.kind == "ID" and s.role in ("LABELLED", "ALNUM"):
                 self.lx.add_id(text[s.start:s.end])
+        for m in re.finditer(r"(?i)(?:distt?\.?|district|tehsil|jila|जिला|तहसील)\s*[:\-.]?\s*([A-Z\u0900-\u097F][\w\u0900-\u097F]+(?: [A-Z\u0900-\u097F][\w\u0900-\u097F]+)?)", text):
+            self.lx.add_place(m.group(1))
         for nm in doctor_names(text):
             for t in re.split(r"\s+", nm):
                 self.lx.doctor_tokens.add(t.casefold())
