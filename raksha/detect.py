@@ -80,7 +80,7 @@ _ALNUM_ID = _tc(r"(?<![\w/\-])(?=[A-Za-z0-9/\-]*\d)[A-Za-z]{2,6}(?:[\-/][A-Za-z0
 _LABELLED_ID = _tc(r"(?i)(?<![A-Za-z])(?:uhid|mrn|ipd(?:\s*no)?|opd(?:\s*no)?|reg(?:istration)?(?:\s*no)?|patient[\s_]*(?:id|ref)|"
                           r"hosp(?:ital)?[\s_]*id|policy(?:\s*no)?|claim(?:\s*no)?|pmjay|abha|aadhaar|aadhar|uid|pan|"
                           r"आधार|यूएचआईडी|पंजीकरण)[\s_]*(?:no\.?|number|id|संख्या|नंबर)?[\s:#.\-=]*([A-Za-z]{0,6}[\-/]?\d[\dA-Za-z/\-]{3,})")
-_DIGITS_AFTER_NAME = _tc(r"(?<=[A-Za-z\u0900-\u097F_])_(\d{4,})(?!\d)")
+_DIGITS_AFTER_NAME = _tc(r"(?<=[A-Za-z\u0900-\u097F_])_(?!(?:19|20)\d\d(?!\d))(\d{4,})(?!\d)")   # a 4-digit year in a file name is not an id
 _MEDCODE = _tc(r"^(?:[A-Z]\d{2}(?:\.\d+)?|\d{3,5}-\d|[A-Z]{1,3}\d{2,3}[A-Z]?)$")  # ICD / LOINC / package codes
 _PHONE_CUE = _tc(r"(?i)(?:mob(?:ile)?|ph(?:one)?|tel|contact|cell|call|whatsapp|no\.?)\s*[:.\-]?\s*$")
 _SPLIT_PHONE = _tc(r"(?<![\d])[6-9]\d{4}[ \t]*\r?\n[ \t]*\d{5}(?![\d])")

@@ -34,7 +34,8 @@ targets = [(os.path.join(dp, n), n) for dp, _, fn in os.walk(out) for n in fn] +
 for p, name in targets:
     try: raw = open(p, encoding="utf-8", errors="ignore").read()
     except OSError: continue
-    v, nz = views(raw) + " " + fold(name), digits(views(raw))
+    v = re.sub(r"\bdr\.?\s+\w+(?:\s+\w+)?", " ", views(raw) + " " + fold(name))      # doctor lines are allowed
+    nz = digits(views(raw))
     for k in keys | canaries:
         if k in v or (digits(k) and len(digits(k)) >= 9 and digits(k) in nz):
             hits.append(("CANARY" if k in canaries else "PII", os.path.relpath(p, out) if p.startswith(out) else p))
