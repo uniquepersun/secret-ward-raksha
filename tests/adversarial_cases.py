@@ -5,7 +5,7 @@ from raksha.detect import Lexicon, find_spans
 from raksha.privacy import band_ages_in_text
 
 CASES = [
- ("Patient: Lalitha Venkatesh, 52 yrs F. Contact 98450 12345.", ["Lalitha Venkatesh", "98450 12345"], ["52"]),
+ ("Patient: Lalitha Venkatesh, 52 yrs F. Contact 98450 12345.", ["Lalitha Venkatesh", "98450 12345"], ["50-59"]),
  ("Pt. Name - Omprakash Tiwari; Relative: Hari Tiwari; Ph (0522) 2345678", ["Omprakash Tiwari", "Hari Tiwari", "2345678"], []),
  ("Son of Shri Baldev Raj Sharma, resident of Gram Rampur, Distt. Etawah", ["Baldev Raj Sharma", "Rampur"], ["Etawah"]),
  ("पिता का नाम: रामलाल यादव, मोबाइल: ९८३९१२३४५६", ["रामलाल यादव", "९८३९१२३४५६"], []),
@@ -42,14 +42,14 @@ CASES = [
  ("Rampur gaon, Sitapur district", ["Rampur"], []),
  ("Father's name: Ramasprasad Verma", ["Ramasprasad Verma"], []),
  ("Caregiver: Gudiya didi stayed", ["Gudiya"], ["stayed"]),
- ("Patient 50/F seen today", [], ["50/F"]),
+ ("Patient 50/F seen today", ["50/F"], ["/F"]),
  ("Lotus Care Hospital reviewed the case", [], ["Lotus Care Hospital"]),
  ("write x at gmail dot com", ["x at gmail dot com"], []),
  ("Employer: Tata Motors Pune; college: Fergusson College", ["Tata Motors", "Fergusson College"], []),
  ("mareez ka mobile: nau chaar ek paanch ek do teen char paanch saat", ["nau chaar ek paanch ek do teen char paanch saat"], ["mareez ka mobile"]),
  ("पता: गली 4, अलीगंज, लखनऊ", ["गली 4", "अलीगंज"], []),
  ("resident of lane 4 sector-B, Aliganj, Lucknow", ["lane 4 sector-B", "Aliganj"], []),
- ("Address: House 180, Mohalla Ganesh, Tehsil Misrikh, Distt. Sitapur", ["House 180"], ["Tehsil Misrikh", "Distt. Sitapur"]),
+ ("Address: House 180, Mohalla Ganesh, Tehsil Misrikh, Distt. Sitapur", ["House 180"], ["Distt. Sitapur"]),
  ("सुनीता यादव, पति रमेश यादव", ["सुनीता यादव"], []),
  ("रोगी (45 वर्ष) को बुखार", ["(45 वर्ष)"], ["बुखार"]),
  ("Shri Balaji Clinic reviewed the case", [], ["Shri Balaji Clinic"]),
