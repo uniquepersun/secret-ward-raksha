@@ -158,11 +158,21 @@ def parse_date_value(s: str, order: str = "dmy") -> dt.date | None:
 
 
 # ------------------------------------------------------------------------------------ ages
+POLICY = {"age_band_years": 5, "age_topcode": 85, "tehsil_level": 1, "pin_digits": 3}
+
+
+def set_policy(p: dict):
+    POLICY.update({k: v for k, v in p.items() if k in POLICY})
+
+
 def band(age: int) -> str:
-    if age >= 85:
-        return "85+"
-    lo = age // 5 * 5
-    return f"{lo}-{lo + 4}"
+    """Truthful band that always contains `age`; open-ended top band hides the very old (rare, unique)."""
+    top = int(POLICY["age_topcode"])
+    if age >= top:
+        return f"{top}+"
+    w = int(POLICY["age_band_years"])
+    lo = age // w * w
+    return f"{lo}-{min(lo + w - 1, top - 1)}"
 
 
 _AGE_UNIT = r"(?:years?|yrs?\.?|y\b|वर्ष|साल|baras)"

@@ -46,6 +46,7 @@ _LOCALITY = rx.compile(rf"(?i)(?<![\w])(?:(?<=,\s*)ward\s*(?:no\.?)?\s*\d+(?!\s*
 _LANDMARK = rx.compile(rf"(?i)(?<![\w])(?:near|opp(?:osite)?\.?|behind|beside|adjacent\s+to|next\s+to|nr\.?)\s+"
                        rf"(?:{TITLE_TOK}(?:\s+{TITLE_TOK}){{0,3}})|"
                        rf"(?:{L}+(?:\s+{L}+){{0,3}})\s+(?:के\s+)?(?:पास|पीछे|सामने|बगल)")
+_TEHSIL_CUE = rx.compile(rf"(?i)(?<![\w])(?:tehsil|tahsil|taluk|block|तहसील)\s*[:\-.]?\s*({SEQ_STRONG})")
 _VILLAGE_CUE = rx.compile(rf"(?i)(?<![\w])(?:village|vill\.?|gram|gaon|gaanv|grm|ग्राम|गाँव|गांव|मौजा)\s*[:\-.]?\s*({SEQ_STRONG})")
 _PIN = rx.compile(r"(?i)(?:pin\s*(?:code)?|postal\s*code|पिन(?:\s*कोड)?)\s*[:\-]?\s*([1-9]\d{5})(?!\d)|"
                   r"(?:(?<=[A-Za-z\u0900-\u097F\)])\s*[\-,]\s*)([1-9]\d{5})(?!\d)")
@@ -284,6 +285,9 @@ def find_spans(text: str, lx: Lexicon, hint: str = "") -> list[Span]:
     for m in _PIN.finditer(v):
         g = 1 if m.group(1) else 2
         add(m.start(g), m.end(g), "PIN", "PIN", 3)
+    for m in _TEHSIL_CUE.finditer(text):
+        s, e = _trim_seq(text, m.start(1), m.end(1), True)
+        add(s, e, "TEHSIL", "TEHSIL", 4)
     for m in _VILLAGE_CUE.finditer(text):
         s, e = _trim_seq(text, m.start(1), m.end(1), True)
         add(s, e, "VILLAGE", "VILLAGE", 4)

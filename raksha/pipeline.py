@@ -162,6 +162,7 @@ class Pipeline:
     def __init__(self, inp: Path, out: Path, secret: bytes, policy: dict):
         self.inp, self.out, self.policy = inp, out, policy
         privacy.configure(secret)
+        privacy.set_policy(policy)
         self.lx = Lexicon()
         self.docs: list[DocState] = []
         self.entities = Counter()
@@ -666,9 +667,12 @@ class Pipeline:
         if k == "PIN":
             dg = re.sub(r"\D", "", ascii_digits(seg))
             self.n_generalized += 1
-            return dg[:3] + "***"
+            nd = int(privacy.POLICY["pin_digits"])
+            return dg[:nd] + "***" if nd else br("PIN")
         if k == "VILLAGE":
             return br("VILLAGE")
+        if k == "TEHSIL":
+            return seg if int(privacy.POLICY["tehsil_level"]) else br("TEHSIL")
         if k == "ADDR":
             return br(r or "ADDRESS")
         return br("REDACTED")
@@ -749,11 +753,14 @@ class Pipeline:
             dg = re.sub(r"\D", "", ascii_digits(sv))
             self.entities["PIN"] += 1
             self.n_generalized += 1
-            return dg[:3] + "***" if len(dg) >= 3 else "[PIN]"
+            nd = int(privacy.POLICY["pin_digits"])
+            return dg[:nd] + "***" if nd and len(dg) >= nd else "[PIN]"
         if role == "VILLAGE":
             self.entities["VILLAGE"] += 1
             return "[VILLAGE]"
-        if role in ("SEX", "TEHSIL", "DISTRICT"):
+        if role == "TEHSIL":
+            return sv if int(privacy.POLICY["tehsil_level"]) else "[TEHSIL]"
+        if role in ("SEX", "DISTRICT"):
             return sv
         hint = ""
         return self.scrub_text(sv, ctx, hint)

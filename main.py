@@ -44,12 +44,13 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", required=True)
     ap.add_argument("--output", required=True)
+    ap.add_argument("--policy", default=str(HERE / "config" / "policy.yaml"))
     a = ap.parse_args()
     t0 = time.monotonic()
     from raksha.pipeline import Pipeline  # imported late so the hook covers import errors
 
     secret = os.environ.get("RAKSHA_SECRET", "").encode()
-    policy = load_policy(HERE / "config" / "policy.yaml")
+    policy = load_policy(Path(a.policy))
     inp, out = Path(a.input), Path(a.output)
     out.mkdir(parents=True, exist_ok=True)
     sys.setrecursionlimit(3000)
