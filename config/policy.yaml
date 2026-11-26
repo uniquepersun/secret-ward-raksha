@@ -8,3 +8,5 @@ tehsil_level: 0            # 1 keeps the tehsil, 0 generalises location to distr
 pin_digits: 0              # digits of the PIN code kept (6-digit PINs are always removed); 0 drops it
 min_group_size: 5          # reserved for rare-combination suppression
 time_budget_s: 540      # past this the remaining files are quarantined (reason time_budget_exceeded) so the run always finishes
+span_timeout_s: 20     # hard wall-clock cap for one scan of one text (a crafted input cannot stall the run)
+regex_timeout_s: 5      # per regex call; interrupts the matching engine itself (signals cannot)

@@ -14,7 +14,7 @@ standard library. Peak memory ~40 MB and ~4.5 s on the practice set; ~47 s and 1
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt        # setup (network allowed)
 RAKSHA_SECRET=practice .venv/bin/python main.py --input <dir> --output <dir>   # run (no network)
-.venv/bin/python -m unittest discover -s tests                            # 26 tests, ~4 s
+.venv/bin/python -m unittest discover -s tests                            # 29 tests, ~11 s
 ```
 
 `RAKSHA_SECRET` keys the pseudonyms and the per-patient date shifts. It is read from the environment only and is never
@@ -112,6 +112,21 @@ Reason codes: `known_malware_hash`, `malware_signature`, `executable_content`, `
 
 Deliberately **not** done: live hash-reputation lookups (VirusTotal and similar). Any network call during `run` is grounds for
 disqualification, so the blocklist is a local file; extend it during `setup` if a larger offline list is wanted.
+
+## Sandbox hardening (the pipeline itself is the target)
+
+The evaluator feeds our pipeline untrusted input, so the pipeline is treated as an attack surface:
+
+* **Supply chain:** `requirements.txt` pins every dependency with the SHA-256 of **every file PyPI publishes** for that version (taken from the
+  PyPI JSON API). `pip` then runs in hash-checking mode and refuses a tampered or substituted package (verified: altered hashes install nothing).
+* **Algorithmic-complexity attacks:** whitespace runs over 100 and non-space runs over 300 characters are masked before scanning (a cue word
+  followed by a whitespace flood made one regex take 244 s; the worst of 324 flood inputs now takes 0.4 s), overlapping `\s*` groups were removed, and
+  every detector pattern runs with the `regex` module's own per-call timeout (`regex_timeout_s`), because a signal alarm cannot interrupt a regex
+  running inside C. A scan that still times out quarantines that file (`file_timeout`); a global budget (`time_budget_s`) quarantines whatever is left.
+* **Resource limits:** no core dumps (a dump would contain PII and the secret), a 3.5 GB address-space ceiling below the sandbox's 4 GB kill limit so a
+  memory bomb raises `MemoryError` for one file instead of killing the run, 100 MB per-file cap, no `.pyc` writes into the repository.
+* **Confinement:** every write target must resolve inside `sanitized/`; symlinks and special files are never followed or opened; nothing is executed,
+  imported or unpacked from input; no `eval`, `exec`, `pickle`, `subprocess`, or network-capable import anywhere in the package.
 
 ## Adversarial hardening
 

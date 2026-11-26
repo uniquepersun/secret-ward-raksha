@@ -20,6 +20,7 @@ precision / recall / F0.5 (wrong merges), reid = simulated share of patients re-
 | 11 | red-team round 1: entities, hex, base64 (nested), `\u` escapes, full-width, homoglyphs, lowercase names, split phones, PII in URLs | 7 leaks found and fixed | | decoded views are used when they expose PII; NFKC + homoglyph fold |
 | 12 | red-team round 2: digit words (English / Hindi), letter-spaced names, cue-less names in prose | 28 / 28 adversarial cases | leak 0.0 | caught my own regressions: URL filter deleted by a bad slice, UUID read as Aadhaar, header names; `tools/check_fhir.py` added |
 | 13 | hostile input: EICAR, PE / ELF / Mach-O, scripts, archives, Office, active content, symlink, FIFO, binary attachments, formula injection | all quarantined or neutralised, exit 0 | | static inspection only; no `urllib` import left (the organisers' audit flags network use); practice still quarantines the same 6 files |
+| 14 | sandbox hardening: hash-pinned requirements, bomb masking, per-call regex timeouts, resource limits, write confinement | 324 flood inputs: worst 0.42 s (was 244 s) | | SIGALRM cannot interrupt a regex in C, so the first timeout design was ineffective; fixed with the regex module's own `timeout` |
 
 Privacy policy grid (attacker_sim, practice data; raw: reid 0.98, record linkage 0.58):
 

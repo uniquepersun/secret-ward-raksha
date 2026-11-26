@@ -10,7 +10,23 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.dont_write_bytecode = True          # never write .pyc files into the repository
 sys.path.insert(0, str(HERE))
+
+
+def harden_process():
+    """Defence in depth for an untrusted-input run: no core dumps (a dump would contain PII and the secret) and a
+    memory ceiling below the sandbox's 4 GB kill limit, so a memory bomb raises MemoryError for one file (caught,
+    quarantined) instead of getting the whole run killed."""
+    try:
+        import resource
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+        soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+        cap = 3_500_000_000
+        if hard == resource.RLIM_INFINITY or hard >= cap:
+            resource.setrlimit(resource.RLIMIT_AS, (cap, hard))
+    except Exception:  # noqa: BLE001 - not available on every OS (macOS ignores RLIMIT_AS); never fatal
+        pass
 
 
 def _hook(exc_type, exc, tb):  # scrubbed: type name only, never the message (it could hold PII)
@@ -46,6 +62,7 @@ def main() -> int:
     ap.add_argument("--output", required=True)
     ap.add_argument("--policy", default=str(HERE / "config" / "policy.yaml"))
     a = ap.parse_args()
+    harden_process()
     t0 = time.monotonic()
     from raksha.pipeline import Pipeline  # imported late so the hook covers import errors
 

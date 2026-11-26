@@ -110,3 +110,17 @@ def percent_decode(s: str) -> str:
         return b.decode("utf-8", "replace")
     except Exception:  # noqa: BLE001
         return raw
+
+
+_LONG_NONSPACE = re.compile(r"\S{300,}")
+_LONG_SPACE = re.compile(r"[ \t\r\n\f\v]{100,}")
+
+
+def mask_bombs(text: str) -> str:
+    """Same-length masking of runs that real documents never contain: 300+ non-space characters (no word or identifier is
+    that long) and 100+ whitespace characters. Cue-word-plus-whitespace floods are what make backtracking regexes
+    quadratic; once masked they cannot be built. Offsets are unchanged, so spans still map onto the original text."""
+    if len(text) < 100:
+        return text
+    text = _LONG_NONSPACE.sub(lambda m: "\x00" * len(m.group(0)), text)
+    return _LONG_SPACE.sub(lambda m: "\x00" * len(m.group(0)), text)

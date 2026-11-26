@@ -21,7 +21,8 @@ import regex as rx
 
 from . import lex, privacy, security
 from .columns import HDR_DOCTOR, infer_role, is_namey
-from .detect import Lexicon, Span, doctor_names, find_spans
+from . import detect as _detect
+from .detect import Lexicon, Span, SpanTimeout, doctor_names, find_spans
 from .link import Ev, Linker, name_set, partial
 from .privacy import band, band_age_value, band_ages_in_text, infer_order, parse_date_value, shift_text_dates
 from .translit import ascii_digits, clean, has_deva, skeleton
@@ -181,6 +182,9 @@ class Pipeline:
         self.id_cluster: dict[str, int] = {}
         self.name_cluster: dict[frozenset, set] = defaultdict(set)
         self.age_max = int(policy.get("date_shift_max_days", 180))
+        _detect.SPAN_TIMEOUT = float(policy.get("span_timeout_s", 20))
+        _detect.REGEX_TIMEOUT = float(policy.get("regex_timeout_s", 5))
+        csv.field_size_limit(100 * 1024 * 1024)
         self.t0 = time.monotonic()
         self.budget = float(policy.get("time_budget_s", 540))   # leave margin under the 15-minute limit
 
@@ -485,6 +489,12 @@ class Pipeline:
     def _learn_text(self, text: str):
         if not text or len(text) < 3:
             return
+        try:
+            self._learn_text_inner(text)
+        except SpanTimeout:
+            return                                   # pathological text teaches us nothing; it is handled (and capped) later
+
+    def _learn_text_inner(self, text: str):
         for s in find_spans(text, self.lx):
             if s.kind == "NAME" and s.prio <= 4:
                 self.lx.add_name(text[s.start:s.end], s.role if s.role in ("patient", "relative") else "patient")
@@ -540,6 +550,8 @@ class Pipeline:
                 continue
             try:
                 self._evidence_for(d)
+            except SpanTimeout:
+                d.status, d.reason = "quarantined", "file_timeout"
             except Exception:  # noqa: BLE001 - one odd file must never stop the run; it is quarantined
                 d.status, d.reason = "quarantined", "processing_error"
 
@@ -661,6 +673,7 @@ class Pipeline:
     def _ev_from_text(self, ev: Ev, text: str, skip_names: bool):
         if not text or not text.strip():
             return
+        text = security.mask_bombs(text)
         t = ascii_digits(text)
         for s in find_spans(text, self.lx):
             seg = text[s.start:s.end]
@@ -1187,6 +1200,15 @@ class Pipeline:
     def _needs_scrub(self, s: str) -> bool:
         return bool(find_spans(s.replace("_", " "), self.lx, loose=False))
 
+    @staticmethod
+    def confined(dest: Path, root: Path) -> bool:
+        """The write target must resolve inside the sanitized/ folder (no ../ or absolute-path tricks)."""
+        try:
+            dest.resolve().relative_to(root.resolve())
+            return True
+        except ValueError:
+            return False
+
     def write_all(self):
         san = self.out / "sanitized"
         san.mkdir(parents=True, exist_ok=True)
@@ -1206,8 +1228,14 @@ class Pipeline:
                     body = self.render_text(d)
                 d.out_rel = self.out_name(d, taken)
                 dest = san / d.out_rel
+                if not self.confined(dest, san):
+                    raise ValueError("path_escape")
                 dest.parent.mkdir(parents=True, exist_ok=True)
+                if dest.is_symlink():
+                    raise ValueError("path_escape")
                 dest.write_text(body, encoding="utf-8", newline="")
+            except SpanTimeout:
+                d.status, d.reason, d.out_rel = "quarantined", "file_timeout", None
             except Exception:  # noqa: BLE001 - fail safe: quarantine, never leak the cause
                 d.status, d.reason, d.out_rel = "quarantined", "processing_error", None
 

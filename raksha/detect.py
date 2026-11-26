@@ -6,13 +6,62 @@ Everything here works on the original string; the digit-normalised view has iden
 from __future__ import annotations
 
 import re
+import signal
+import threading
 from dataclasses import dataclass
 
 import regex as rx
 from rapidfuzz.distance import JaroWinkler
 
 from . import lex
+from .security import mask_bombs
 from .translit import ascii_digits, has_deva, skeleton
+
+REGEX_TIMEOUT = 5.0           # seconds per regex call (interrupts the engine itself; SIGALRM cannot)
+
+
+class _TP:
+    """Compiled pattern whose every call carries the regex module's own timeout."""
+    __slots__ = ("p",)
+
+    def __init__(self, p):
+        self.p = p
+
+    def _call(self, name, *a, **k):
+        try:
+            return getattr(self.p, name)(*a, timeout=REGEX_TIMEOUT, **k)
+        except TimeoutError:
+            raise SpanTimeout()
+
+    def finditer(self, *a, **k):
+        it = self._call("finditer", *a, **k)
+        try:
+            while True:
+                yield next(it)
+        except StopIteration:
+            return
+        except TimeoutError:
+            raise SpanTimeout()
+
+    def search(self, *a, **k):
+        return self._call("search", *a, **k)
+
+    def match(self, *a, **k):
+        return self._call("match", *a, **k)
+
+    def fullmatch(self, *a, **k):
+        return self._call("fullmatch", *a, **k)
+
+    def sub(self, *a, **k):
+        return self._call("sub", *a, **k)
+
+    def findall(self, *a, **k):
+        return self._call("findall", *a, **k)
+
+
+def _tc(*a, **k):
+    return _TP(rx.compile(*a, **k))
+
 
 L = r"[\p{L}\p{M}]"
 TOK = rf"{L}+(?:['’\-]{L}+)*\.?"
@@ -22,74 +71,74 @@ SEQ_TITLE = rf"{TITLE_TOK}(?:[ \t]{{1,2}}{TITLE_TOK}){{0,3}}"
 F = rx.IGNORECASE | rx.UNICODE | rx.MULTILINE
 
 # ---------------------------------------------------------------- identifiers (digit view)
-_RUN = rx.compile(r"(?<![\w])\+?\(?\d(?:\)?[ \-.]{0,2}\d){5,}(?![\w])")
-_MASKED = rx.compile(r"(?<![\w])(?:[Xx*•#]{2,4}[\s\-]?){2}\d{4}(?!\d)|(?<![\w])[Xx*•]{4}[\s-]?[Xx*•]{4}[\s-]?[Xx*•\d]{4}")
-_EMAIL = rx.compile(r"(?<![\w.+\-])[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+|(?<![\w])[\w.\-]{3,}@(?:abdm|sbx|ndhm|abha)\b", rx.I)
-_PAN = rx.compile(r"(?<![A-Za-z0-9])[A-Z]{5}\d{4}[A-Z](?![A-Za-z0-9])")
-_ALNUM_ID = rx.compile(r"(?<![\w/\-])(?=[A-Za-z0-9/\-]*\d)[A-Za-z]{2,6}(?:[\-/][A-Za-z0-9]{1,10}){1,4}(?![\w])|"
+_RUN = _tc(r"(?<![\w])\+?\(?\d(?:\)?[ \-.]{0,2}\d){5,}(?![\w])")
+_MASKED = _tc(r"(?<![\w])(?:[Xx*•#]{2,4}[\s\-]?){2}\d{4}(?!\d)|(?<![\w])[Xx*•]{4}[\s-]?[Xx*•]{4}[\s-]?[Xx*•\d]{4}")
+_EMAIL = _tc(r"(?<![\w.+\-])[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+|(?<![\w])[\w.\-]{3,}@(?:abdm|sbx|ndhm|abha)\b", rx.I)
+_PAN = _tc(r"(?<![A-Za-z0-9])[A-Z]{5}\d{4}[A-Z](?![A-Za-z0-9])")
+_ALNUM_ID = _tc(r"(?<![\w/\-])(?=[A-Za-z0-9/\-]*\d)[A-Za-z]{2,6}(?:[\-/][A-Za-z0-9]{1,10}){1,4}(?![\w])|"
                        r"(?<![\w])[A-Za-z]{2,5}\d{4,}[A-Za-z0-9]*(?![\w])")
-_LABELLED_ID = rx.compile(r"(?i)(?<![A-Za-z])(?:uhid|mrn|ipd(?:\s*no)?|opd(?:\s*no)?|reg(?:istration)?(?:\s*no)?|patient[\s_]*(?:id|ref)|"
+_LABELLED_ID = _tc(r"(?i)(?<![A-Za-z])(?:uhid|mrn|ipd(?:\s*no)?|opd(?:\s*no)?|reg(?:istration)?(?:\s*no)?|patient[\s_]*(?:id|ref)|"
                           r"hosp(?:ital)?[\s_]*id|policy(?:\s*no)?|claim(?:\s*no)?|pmjay|abha|aadhaar|aadhar|uid|pan|"
                           r"आधार|यूएचआईडी|पंजीकरण)[\s_]*(?:no\.?|number|id|संख्या|नंबर)?[\s:#.\-=]*([A-Za-z]{0,6}[\-/]?\d[\dA-Za-z/\-]{3,})")
-_DIGITS_AFTER_NAME = rx.compile(r"(?<=[A-Za-z\u0900-\u097F_])_(\d{4,})(?!\d)")
-_MEDCODE = rx.compile(r"^(?:[A-Z]\d{2}(?:\.\d+)?|\d{3,5}-\d|[A-Z]{1,3}\d{2,3}[A-Z]?)$")  # ICD / LOINC / package codes
-_PHONE_CUE = rx.compile(r"(?i)(?:mob(?:ile)?|ph(?:one)?|tel|contact|cell|call|whatsapp|no\.?)\s*[:.\-]?\s*$")
-_SPLIT_PHONE = rx.compile(r"(?<![\d])[6-9]\d{4}[ \t]*\r?\n[ \t]*\d{5}(?![\d])")
+_DIGITS_AFTER_NAME = _tc(r"(?<=[A-Za-z\u0900-\u097F_])_(\d{4,})(?!\d)")
+_MEDCODE = _tc(r"^(?:[A-Z]\d{2}(?:\.\d+)?|\d{3,5}-\d|[A-Z]{1,3}\d{2,3}[A-Z]?)$")  # ICD / LOINC / package codes
+_PHONE_CUE = _tc(r"(?i)(?:mob(?:ile)?|ph(?:one)?|tel|contact|cell|call|whatsapp|no\.?)\s*[:.\-]?\s*$")
+_SPLIT_PHONE = _tc(r"(?<![\d])[6-9]\d{4}[ \t]*\r?\n[ \t]*\d{5}(?![\d])")
 _DW_EN = r"(?:zero|one|two|three|four|five|six|seven|eight|nine|oh)"
 _DW_HI = r"(?:शून्य|एक|दो|तीन|चार|पांच|पाँच|छह|छः|सात|आठ|नौ)"
-_DIGIT_WORDS = rx.compile(rf"(?i)(?<![\w\p{{M}}])(?:{_DW_EN}(?:[ ,\-]+{_DW_EN}){{9,13}}|{_DW_HI}(?:[ ,\-]+{_DW_HI}){{9,13}})(?![\w\p{{M}}])")
-_SPACED = rx.compile(r"(?<![\w])(?:\p{L}[ .\-_]){4,}\p{L}(?![\w])")
-_CUE_THEN_WORD = rx.compile(r"(?i:\b(?:said|says|told|informed|named|called|neighbou?r|friend|brother|sister|uncle|aunt|cousin|nephew|niece|colleague|boss|landlord|driver|maid)\s+)(\p{Lu}\p{Ll}{3,})(?![\p{L}\p{M}])")
-_UUID = rx.compile(r"(?i)(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])")
-_URL = rx.compile(r"(?i)\b(?:https?://|www\.)[^\s\"'<>)\]]+|(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])")  # URLs and UUIDs are never PII
-_DATEISH = rx.compile(r"^\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4}$")
+_DIGIT_WORDS = _tc(rf"(?i)(?<![\w\p{{M}}])(?:{_DW_EN}(?:[ ,\-]+{_DW_EN}){{9,13}}|{_DW_HI}(?:[ ,\-]+{_DW_HI}){{9,13}})(?![\w\p{{M}}])")
+_SPACED = _tc(r"(?<![\w])(?:\p{L}[ .\-_]){4,}\p{L}(?![\w])")
+_CUE_THEN_WORD = _tc(r"(?i:\b(?:said|says|told|informed|named|called|neighbou?r|friend|brother|sister|uncle|aunt|cousin|nephew|niece|colleague|boss|landlord|driver|maid)\s+)(\p{Lu}\p{Ll}{3,})(?![\p{L}\p{M}])")
+_UUID = _tc(r"(?i)(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])")
+_URL = _tc(r"(?i)\b(?:https?://|www\.)[^\s\"'<>)\]]+|(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])")  # URLs and UUIDs are never PII
+_DATEISH = _tc(r"^\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4}$")
 
 # ---------------------------------------------------------------- address pieces
-_HOUSE = rx.compile(rf"(?i)(?<![\w])(?:h\.?\s*no\.?|house(?:\s*no\.?)?|makan(?:\s*no\.?)?|flat(?:\s*no\.?)?|plot(?:\s*no\.?)?|"
-                    rf"quarter(?:\s*no\.?)?|room\s*no\.?|मकान(?:\s*नं?\.?|\s*नंबर)?|मकान\s*सं\.?|घर\s*नं?\.?)\s*[:\-]?\s*"
+_HOUSE = _tc(rf"(?i)(?<![\w])(?:h\.?\s*no\.?|house(?:\s*no\.?)?|makan(?:\s*no\.?)?|flat(?:\s*no\.?)?|plot(?:\s*no\.?)?|"
+                    rf"quarter(?:\s*no\.?)?|room\s*no\.?|मकान(?:\s*नं?\.?|\s*नंबर)?|मकान\s*सं\.?|घर\s*नं?\.?)\s*(?:[:\-]\s*)?"
                     rf"\d+[A-Za-z]?(?:[/\-]\d+[A-Za-z]?)*")
-_LOCALITY = rx.compile(rf"(?i)(?<![\w])(?:(?<=,\s*)ward\s*(?:no\.?)?\s*\d+(?!\s*[(/]|\s+bed\b|\s*[,\-]\s*bed\b|\s*(?:icu|ward)\b)|mohalla\s+{SEQ_TITLE}|mohalle\s+{SEQ_TITLE}|"
+_LOCALITY = _tc(rf"(?i)(?<![\w])(?:ward(?<=,\s*ward)\s*(?:no\.?\s*)?\d+(?!\s*[(/]|\s+bed\b|\s*[,\-]\s*bed\b|\s*(?:icu|ward)\b)|mohalla\s+{SEQ_TITLE}|mohalle\s+{SEQ_TITLE}|"
                        rf"colony\s+{SEQ_TITLE}|nagar\s+{SEQ_TITLE}|मोहल्ला\s+{TOK}(?:\s+{TOK}){{0,2}}|"
-                       rf"वार्ड\s*(?:नं\.?)?\s*\d+|कॉलोनी\s+{TOK}(?:\s+{TOK}){{0,2}})")
-_LANDMARK = rx.compile(rf"(?i)(?<![\w])(?:near|opp(?:osite)?\.?|behind|beside|adjacent\s+to|next\s+to|nr\.?)\s+"
+                       rf"वार्ड\s*(?:नं\.?\s*)?\d+|कॉलोनी\s+{TOK}(?:\s+{TOK}){{0,2}})")
+_LANDMARK = _tc(rf"(?i)(?<![\w])(?:near|opp(?:osite)?\.?|behind|beside|adjacent\s+to|next\s+to|nr\.?)\s+"
                        rf"(?:{TITLE_TOK}(?:\s+{TITLE_TOK}){{0,3}})|"
                        rf"(?<![\w\p{{M}}])(?:{L}+(?:\s+{L}+){{0,3}})\s+(?:के\s+)?(?:पास|पीछे|सामने|बगल)")
-_TEHSIL_CUE = rx.compile(rf"(?i)(?<![\w])(?:tehsil|tahsil|taluk|block|तहसील)\s*[:\-.]?\s*({SEQ_STRONG})")
-_VILLAGE_CUE = rx.compile(rf"(?i)(?<![\w])(?:village|vill\.?|gram|gaon|gaanv|grm|ग्राम|गाँव|गांव|मौजा)\s*[:\-.]?\s*({SEQ_STRONG})")
-_PIN = rx.compile(r"(?i)(?:pin\s*(?:code)?|postal\s*code|पिन(?:\s*कोड)?)\s*[:\-]?\s*([1-9]\d{5})(?!\d)|"
+_TEHSIL_CUE = _tc(rf"(?i)(?<![\w])(?:tehsil|tahsil|taluk|block|तहसील)\s*(?:[:\-.]\s*)?({SEQ_STRONG})")
+_VILLAGE_CUE = _tc(rf"(?i)(?<![\w])(?:village|vill\.?|gram|gaon|gaanv|grm|ग्राम|गाँव|गांव|मौजा)\s*(?:[:\-.]\s*)?({SEQ_STRONG})")
+_PIN = _tc(r"(?i)(?:pin\s*(?:code)?|postal\s*code|पिन(?:\s*कोड)?)\s*(?:[:\-]\s*)?([1-9]\d{5})(?!\d)|"
                   r"(?:(?<=[A-Za-z\u0900-\u097F\)])\s*[\-,]\s*)([1-9]\d{5})(?!\d)")
-_BARE_PIN = rx.compile(r"(?<![\d.])[1-9]\d{5}(?![\d.]|\s*(?:mg|ml|g|kg|iu|%))")
+_BARE_PIN = _tc(r"(?<![\d.])[1-9]\d{5}(?![\d.]|\s*(?:mg|ml|g|kg|iu|%))")
 
 # ---------------------------------------------------------------- name cues
-_STRONG_LABEL = rx.compile(rf"(?i)(?<![\w])(?:patient(?:['’]s)?[\s_]*name|pt\.?[\s_]*name|name[\s_]*of[\s_]*(?:the[\s_]*)?patient|"
+_STRONG_LABEL = _tc(rf"(?i)(?<![\w])(?:patient(?:['’]s)?[\s_]*name|pt\.?[\s_]*name|name[\s_]*of[\s_]*(?:the[\s_]*)?patient|"
                            rf"full[\s_]*name|first[\s_]*name|last[\s_]*name|name|naam|नाम|मरीज\s*का\s*नाम|रोगी\s*का\s*नाम|"
                            rf"पूरा\s*नाम|nom)\s*[:\-=]\s*({SEQ_STRONG})")
-_WEAK_LABEL = rx.compile(rf"(?i)(?<![\w])(?:patient|pt\.?|note\s*for|report\s*(?:for|of)|record\s*(?:for|of)|letter\s*(?:for|of)|"
+_WEAK_LABEL = _tc(rf"(?i)(?<![\w])(?:patient|pt\.?|note\s*for|report\s*(?:for|of)|record\s*(?:for|of)|letter\s*(?:for|of)|"
                          rf"referral\s*for|certificate\s*(?:for|of)|consent\s*(?:of|for)|admitted\s*:|"
                          rf"mr\.?|mrs\.?|ms\.?|miss|mx|smt\.?|shri|shree|sri|km\.?|kumari|master|baby|late|"
                          rf"श्रीमती|श्री|कुमारी|सुश्री|मास्टर|मरीज|रोगी|पेशेंट|स्व\.?)[\s:.\-]+({SEQ_TITLE})")
-_OTHER_LABEL = rx.compile(rf"(?i)(?<![\w])(?:caller|informant|contact(?:\s*person)?|witness(?:ed)?(?:\s*by)?|attendant|guardian|"
+_OTHER_LABEL = _tc(rf"(?i)(?<![\w])(?:caller|informant|contact(?:\s*person)?|witness(?:ed)?(?:\s*by)?|attendant|guardian|"
                           rf"visitor|bystander|relative|next\s*of\s*kin|emergency\s*contact|raised\s*by|called\s*by|signed\s*by|"
                           rf"reported\s*by|requested\s*by|handed\s*over\s*to|spoke\s*(?:to|with)|accompanied\s*by|brought\s*by)"
                           rf"[\s:.\-]+({SEQ_TITLE})")
-_RELATION = rx.compile(rf"(?i)(?<![\w])(?:s\s*/\s*o|d\s*/\s*o|w\s*/\s*o|h\s*/\s*o|c\s*/\s*o|son\s+of|daughter\s+of|wife\s+of|"
+_RELATION = _tc(rf"(?i)(?<![\w])(?:s\s*/\s*o|d\s*/\s*o|w\s*/\s*o|h\s*/\s*o|c\s*/\s*o|son\s+of|daughter\s+of|wife\s+of|"
                        rf"husband\s+of|father|mother|guardian|spouse|relative|attendant|पुत्र|पुत्री|पत्नी|पति|सुपुत्र|"
-                       rf"सुपुत्री|पिता|माता|द्वारा)\b?\.?[\s:\-]*(?:(?:name|naam|नाम)\s*[:\-]?\s*)?(?:श्री(?:मती)?\s+|mr\.?\s+|mrs\.?\s+|smt\.?\s+|shri\s+)?"
+                       rf"सुपुत्री|पिता|माता|द्वारा)\b?\.?[\s:\-]*(?:(?:name|naam|नाम)\s*(?:[:\-]\s*)?)?(?:श्री(?:मती)?\s+|mr\.?\s+|mrs\.?\s+|smt\.?\s+|shri\s+)?"
                        rf"({SEQ_TITLE})")
-_RELATION_LOW = rx.compile(rf"(?i)(?<![\w])(?:s\s*/\s*o|d\s*/\s*o|w\s*/\s*o)\b\.?[\s:\-]*({SEQ_STRONG})")
-_SUFFIX = rx.compile(rf"(?<![\w])({SEQ_TITLE})\s+(?:(?i:ji|sahab|saheb|sahib|bhai|bhaiya|bhaiyya|didi|behen|behan|behenji|behnji|"
+_RELATION_LOW = _tc(rf"(?i)(?<![\w])(?:s\s*/\s*o|d\s*/\s*o|w\s*/\s*o)\b\.?[\s:\-]*({SEQ_STRONG})")
+_SUFFIX = _tc(rf"(?<![\w])({SEQ_TITLE})\s+(?:(?i:ji|sahab|saheb|sahib|bhai|bhaiya|bhaiyya|didi|behen|behan|behenji|behnji|"
                      rf"madam|mataji|bhabhi|chacha|chachi|mausi|amma|appa|anna|akka|dada|dadi|nani|nana)|जी|साहब|साहेब|भाई|भैया|दीदी|बहन|"
                      rf"बहनजी|मैडम|माता|भाभी|चाचा|चाची|मौसी|ताई|अम्मा)(?![\w\p{{M}}])")
-_ROLE_AFTER = rx.compile(rf"(?<![\w])({SEQ_TITLE})\s*[,(]\s*(?:\(?\s*)?(?i:attendant|relative|visitor|caller|guardian|father|mother|"
+_ROLE_AFTER = _tc(rf"(?<![\w])({SEQ_TITLE})\s*[,(]\s*(?:\(?\s*)?(?i:attendant|relative|visitor|caller|guardian|father|mother|"
                          rf"wife|husband|brother|sister|son|daughter|friend|neighbou?r|patient|pt)\b")
-_NAME_PHONE = rx.compile(rf"(?<![\w])({SEQ_TITLE})\s*[,:\-(]?\s*(?:(?i:mob(?:ile)?|ph(?:one)?|tel|contact|cell|call|no\.?)\s*[:.\-]?\s*)?"
+_NAME_PHONE = _tc(rf"(?<![\w])({SEQ_TITLE})\s*[,:\-(]?\s*(?:(?i:mob(?:ile)?|ph(?:one)?|tel|contact|cell|call|no\.?)\s*[:.\-]?\s*)?"
                          rf"\+?\(?\d{{3,5}}")
-_WA_SENDER = rx.compile(rf"(?m)^\[[^\]\n]{{4,30}}\]\s*({SEQ_STRONG}):")
-_DOCTOR_BEFORE = rx.compile(r"(?i)(?:\bdr|\bdoctor|डॉ|डा|डॉक्टर|\bprof)\.?\s*$")
-_DOCTOR_PHRASE = rx.compile(rf"(?i)(?<![\w])(?:dr|doctor|डॉ|डा|डॉक्टर|prof)\.?\s*({SEQ_STRONG})")
-_HINDI_PARTICLE = rx.compile(rf"(?<![\w\p{{M}}])([\u0900-\u097F\p{{M}}]+(?:\s+[\u0900-\u097F\p{{M}}]+){{0,2}})\s+(?:को|का|की|के|ने)\s")
+_WA_SENDER = _tc(rf"(?m)^\[[^\]\n]{{4,30}}\]\s*({SEQ_STRONG}):")
+_DOCTOR_BEFORE = _tc(r"(?i)(?:\bdr|\bdoctor|डॉ|डा|डॉक्टर|\bprof)\.?\s*$")
+_DOCTOR_PHRASE = _tc(rf"(?i)(?<![\w])(?:dr|doctor|डॉ|डा|डॉक्टर|prof)\.?\s*({SEQ_STRONG})")
+_HINDI_PARTICLE = _tc(rf"(?<![\w\p{{M}}])([\u0900-\u097F\p{{M}}]+(?:\s+[\u0900-\u097F\p{{M}}]+){{0,2}})\s+(?:को|का|की|के|ने)\s")
 
-_TOKEN = rx.compile(rf"{TOK}")
+_TOKEN = _tc(rf"{TOK}")
 
 
 def _valid_run(raw: str, digits: str, groups: list, ctx_before: str = "") -> bool:
@@ -240,7 +289,19 @@ def _is_doctor_context(text: str, pos: int) -> bool:
     return bool(_DOCTOR_BEFORE.search(text[max(0, pos - 14):pos]))
 
 
-_LONGRUN = rx.compile(r"\S{300,}")
+SPAN_TIMEOUT = 20.0          # seconds per scan; set from policy (span_timeout_s)
+
+
+class SpanTimeout(Exception):
+    """A single scan exceeded its time cap (pathological input)."""
+
+
+def _on_alarm(signum, frame):
+    raise SpanTimeout()
+
+
+_CAPWORD = _tc(r"\p{Lu}\p{Ll}*")
+_LONGRUN = _tc(r"\S{300,}")
 CHUNK = 100_000
 
 
@@ -249,19 +310,32 @@ def find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> li
     identifiers, so they are masked before scanning; very large texts are scanned in line-aligned chunks."""
     if not text or not text.strip():
         return []
-    masked = _LONGRUN.sub(lambda m: "\x00" * len(m.group(0)), text)
-    if len(masked) <= CHUNK:
-        return _find_spans(masked, lx, hint, loose)
-    out, pos = [], 0
-    while pos < len(masked):
-        end = min(len(masked), pos + CHUNK)
-        if end < len(masked):
-            nl = masked.rfind("\n", pos, end)
-            end = nl + 1 if nl > pos else end
-        for sp in _find_spans(masked[pos:end], lx, hint, loose):
-            out.append(Span(sp.start + pos, sp.end + pos, sp.kind, sp.role, sp.prio))
-        pos = end
-    return out
+    masked = mask_bombs(text)
+    armed = hasattr(signal, "setitimer") and threading.current_thread() is threading.main_thread() and SPAN_TIMEOUT > 0
+    prev = signal.signal(signal.SIGALRM, _on_alarm) if armed else None
+
+    def scan(chunk):
+        if armed:                                  # hard wall-clock cap per chunk: a crafted input cannot stall the run
+            signal.setitimer(signal.ITIMER_REAL, SPAN_TIMEOUT)
+        return _find_spans(chunk, lx, hint, loose)
+
+    try:
+        if len(masked) <= CHUNK:
+            return scan(masked)
+        out, pos = [], 0
+        while pos < len(masked):
+            end = min(len(masked), pos + CHUNK)
+            if end < len(masked):
+                nl = masked.rfind("\n", pos, end)
+                end = nl + 1 if nl > pos else end
+            for sp in scan(masked[pos:end]):
+                out.append(Span(sp.start + pos, sp.end + pos, sp.kind, sp.role, sp.prio))
+            pos = end
+        return out
+    finally:
+        if armed:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, prev)
 
 
 def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> list[Span]:
@@ -423,7 +497,7 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
             seg = m.group(0)
             word = re.sub(r"[ .\-_]", "", seg)
             tl = word.casefold()
-            parts = rx.findall(r"\p{Lu}\p{Ll}*", word) or [word]
+            parts = _CAPWORD.findall(word) or [word]
             hit = any(len(w) >= 4 and (w.casefold() in lx.name_tokens or w.casefold() in lex.SEED_GIVEN
                                        or w.casefold() in lex.SEED_SURNAME) and not lex.known_nonname(w) for w in parts + [word])
             if len(word) >= 5 and hit:
@@ -438,7 +512,7 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
                     add(toks[i][0], toks[i + n - 1][1], "VILLAGE", "VILLAGE", 4)
                     break
     # generic last resort: rare Title-Case 2-3 token sequence made of plausible name tokens
-    pair_rx = rx.compile(rf"(?<![\w\p{{M}}])({TITLE_TOK}(?:[ \t]{{1,2}}{TITLE_TOK}){{1,2}})(?![\w\p{{M}}])")
+    pair_rx = _tc(rf"(?<![\w\p{{M}}])({TITLE_TOK}(?:[ \t]{{1,2}}{TITLE_TOK}){{1,2}})(?![\w\p{{M}}])")
     for m in (pair_rx.finditer(text) if loose else ()):
         seq_start = m.start(1)
         run, runs = [], []

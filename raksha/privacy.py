@@ -13,6 +13,7 @@ import re
 
 import regex as rx
 
+from .security import mask_bombs
 from .translit import ascii_digits
 
 _SECRET = os.environ.get("RAKSHA_SECRET", "").encode()  # never printed or written
@@ -80,7 +81,7 @@ def shift_text_dates(text: str, days: int, order: str = "dmy") -> tuple[str, int
     """Shift every date in `text` by `days`, preserving each date's own format. Returns (text, n)."""
     if not text:
         return text, 0
-    t = ascii_digits(text)
+    t = ascii_digits(mask_bombs(text))
     edits: list[tuple[int, int, str]] = []
 
     def add(m, new):
@@ -201,7 +202,7 @@ _AGE_PATTERNS = [
 
 
 def band_ages_in_text(text: str) -> tuple[str, int]:
-    t = ascii_digits(text)
+    t = ascii_digits(mask_bombs(text))
     edits = []
     for p in _AGE_PATTERNS:
         for m in p.finditer(t):
