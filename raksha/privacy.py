@@ -27,10 +27,13 @@ def configure(secret: bytes):
     _SECRET = secret
 
 
-def shift_days(key: str, max_days: int = 180) -> int:
+def shift_days(key: str, max_days: int = 365, min_days: int = 90) -> int:
+    """Per-patient secret shift, magnitude in [min_days, max_days] and random sign: never close to zero, so the visit month (and
+    usually the year) an attacker may know from gossip or a voter-list story no longer matches. Same shift for one patient."""
     d = hmac.new(_SECRET, b"shift|" + key.encode("utf-8"), hashlib.sha256).digest()
-    v = int.from_bytes(d[:4], "big") % (2 * max_days) - max_days
-    return v if v != 0 else 1
+    span = max(1, max_days - min_days + 1)
+    mag = min_days + int.from_bytes(d[:4], "big") % span
+    return mag if d[4] & 1 else -mag
 
 
 _ALPH = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"

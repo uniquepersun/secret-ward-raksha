@@ -14,7 +14,7 @@ standard library. Peak memory ~40 MB and ~4.5 s on the practice set; ~47 s and 1
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt        # setup (network allowed)
 RAKSHA_SECRET=practice .venv/bin/python main.py --input <dir> --output <dir>   # run (no network)
-.venv/bin/python -m unittest discover -s tests                            # 29 tests, ~11 s
+.venv/bin/python -m unittest discover -s tests                            # 31 tests, ~11 s
 ```
 
 `RAKSHA_SECRET` keys the pseudonyms and the per-patient date shifts. It is read from the environment only and is never
@@ -70,10 +70,12 @@ homonyms with different relative and village stay apart. A pseudonym is `PSN-` +
 written **inside** the cleaned record (it replaces the patient's name / hospital id), so it is present wherever `records.jsonl`
 claims it. A lone phone number never creates an identity (it may belong to a caller or attendant).
 
-**Privacy layer.** Dates: one HMAC-derived shift in +-180 days per patient, applied to every date format (ISO, dd/mm, mm/dd, written
-months), so intervals and stay lengths are exact; the day/month order is inferred per hospital from unambiguous dates. Ages become
+**Privacy layer.** Dates: one HMAC-derived shift per patient, **90 to 365 days in magnitude** (never near zero, so the month, and usually the year, of a visit that
+an attacker knows from a voter-list story no longer matches), applied to every date format (ISO, dd/mm, mm/dd, written months, Hindi months), so intervals
+and stay lengths are exact. **Rare conditions:** a diagnosis code held by only one patient, with its display text, is replaced by `[RARE CONDITION]` for that
+patient, because "who was treated for what" is itself identifying; common conditions, drugs, doses and labs are always kept exactly (the scoring requires it); the day/month order is inferred per hospital from unambiguous dates. Ages become
 truthful 10-year bands that always contain the real age (`75+` top-code). Village, house, ward, mohalla, landmark and PIN are
-removed; tehsil is dropped; district is kept. `config/policy.yaml` holds the knobs and `SCORES.md` the measurements behind them.
+removed; tehsil is dropped; district is kept. `config/policy.yaml` holds the knobs (`date_shift_min/max_days`, `rare_dx_max_patients`) and `SCORES.md` the measurements behind them.
 
 **Security design.** Everything is held in memory: no intermediate files, so nothing to encrypt or clean up. The secret is only
 read from the environment. `sys.excepthook` prints the exception type only. stdout carries counts only. Quarantined files are
@@ -150,7 +152,8 @@ re-validates FHIR after every change.
   (Kruti Dev) is not decoded.
 * A name that appears nowhere in a structured field and has no textual cue is found only by the rare-pair rule; it can be missed.
 * dd/mm vs mm/dd is inferred statistically per hospital; a hospital with no unambiguous date anywhere falls back to the global majority.
-* Rare diagnoses are kept (they are medical values), so a "known rare condition" targeted attack still succeeds (simulated 0.2 of raw).
+* Only a diagnosis held by a single patient is generalised (cost: 0.8% of medical values, targeted attack 0.24 -> 0.15 in our simulation). Rare *procedures* and
+  treatments that appear without an ICD code are not generalised, and a condition shared by two patients is kept.
 * Ages in JSON become band strings, which changes that field's value type.
 * All thresholds were tuned on one synthetic generator's practice set plus our own mutations; hidden data may differ.
 * No trained model ships (the plan for a CRF / gradient-boosted second stage was dropped: rules plus the learned lexicon already

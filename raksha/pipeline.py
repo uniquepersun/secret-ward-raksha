@@ -69,11 +69,12 @@ class DocState:
 
 class Ctx:
     """Per-record scrub context."""
-    __slots__ = ("psn", "shift", "order", "skels", "ids", "cores", "ident", "names")
+    __slots__ = ("psn", "shift", "order", "skels", "ids", "cores", "ident", "names", "rare")
 
     def __init__(self, psn=None, shift=None, order="dmy", skels=frozenset(), ids=frozenset(), cores=frozenset(), ident=False, names=()):
         self.psn, self.shift, self.order, self.skels, self.ids, self.cores, self.ident = psn, shift, order, skels, ids, cores, ident
         self.names = names
+        self.rare = ()
 
 
 NOCTX = Ctx()
@@ -181,7 +182,11 @@ class Pipeline:
         self.cl_info: dict[int, dict] = {}
         self.id_cluster: dict[str, int] = {}
         self.name_cluster: dict[frozenset, set] = defaultdict(set)
-        self.age_max = int(policy.get("date_shift_max_days", 180))
+        self.age_max = int(policy.get("date_shift_max_days", 365))
+        self.age_min = int(policy.get("date_shift_min_days", 90))
+        self.rare_max = int(policy.get("rare_dx_max_patients", 1))
+        self.dx_display: dict = defaultdict(set)
+        self.dx_patients: Counter = Counter()
         _detect.SPAN_TIMEOUT = float(policy.get("span_timeout_s", 20))
         _detect.REGEX_TIMEOUT = float(policy.get("regex_timeout_s", 5))
         csv.field_size_limit(100 * 1024 * 1024)
@@ -736,6 +741,32 @@ class Pipeline:
                     ev.dob = dd.isoformat()
 
     # =========================================================================== linking
+    _ICD = re.compile(r"[A-TV-Z]\d{2}(?:\.\d{1,2})?")
+    _DX_TEXT = re.compile(r"([^;:\n()\[\]]{3,80}?)\s*\(\s*([A-TV-Z]\d{2}(?:\.\d{1,2})?)\s*\)")
+    _DX_JSON = re.compile(r'"code"\s*:\s*"([A-TV-Z]\d{2}(?:\.\d{1,2})?)"\s*,\s*"display"\s*:\s*"([^"]{3,120})"|"display"\s*:\s*"([^"]{3,120})"\s*,\s*"code"\s*:\s*"([A-TV-Z]\d{2}(?:\.\d{1,2})?)"')
+
+    def _unit_codes(self, d: DocState, u: Unit) -> set:
+        """ICD-10 codes (and their display text) a record states: `Anaemia, unspecified (D64.9)` or {"code": ..., "display": ...}."""
+        if d.kind == "csv":
+            blob = " ".join(d.rows[u.node])
+        elif d.kind == "json":
+            blob = json.dumps(u.node, ensure_ascii=False)
+        else:
+            blob = d.text
+        found = set()
+        for m in self._DX_TEXT.finditer(blob):
+            found.add(m.group(2))
+            self.dx_display[m.group(2)].add(m.group(1).strip(" ,-"))
+        for m in self._DX_JSON.finditer(blob):
+            code, disp = (m.group(1), m.group(2)) if m.group(1) else (m.group(4), m.group(3))
+            found.add(code)
+            self.dx_display[code].add(disp.strip())
+        if d.kind == "json":
+            for parts, key, v in self._iter_json(u.node, u.base):
+                if isinstance(v, str) and key.lower() in ("code", "icd", "icd10", "icd_code", "diagnosis_code") and self._ICD.fullmatch(v.strip()):
+                    found.add(v.strip())
+        return found
+
     def link(self):
         units = [(d, u) for d in self.docs if d.status == "sanitized" for u in d.units]
         evs = [u.ev for _, u in units]
@@ -774,14 +805,35 @@ class Pipeline:
             # records that carry a phone / id fragment but no patient identity still get their dates shifted
             weak = any(evs[i].phones or evs[i].cores for i in idx)
             self.cl_info[r] = {"key": key, "ident": ident, "psn": privacy.pseudonym(key) if ident else None,
-                               "shift": privacy.shift_days(key, self.age_max) if (ident or weak) else None,
+                               "shift": privacy.shift_days(key, self.age_max, self.age_min) if (ident or weak) else None,
                                "skels": skels, "ids": frozenset(ids), "cores": frozenset(cores), "n": len(idx), "names": tuple(set(names))}
+            codes = set()
             for i in idx:
                 units[i][1].cluster = r
+                try:
+                    codes |= self._unit_codes(*units[i])
+                except Exception:  # noqa: BLE001
+                    pass
+            self.cl_info[r]["codes"] = codes
+            if ident:
+                self.dx_patients.update(codes)
             for k in ids:
                 self.id_cluster.setdefault(k, r)
             for nm in names:
                 self.name_cluster[nm].add(r)
+
+    def _rare_terms(self, r) -> tuple:
+        """A condition held by at most `rare_dx_max_patients` patients singles them out against a voter list (who was treated
+        for what, and when), so for those patients the code and its display text are generalised away."""
+        info = self.cl_info.get(r) or {}
+        if self.rare_max <= 0 or not info.get("ident"):
+            return ()
+        out = set()
+        for c in info.get("codes", ()):
+            if self.dx_patients[c] <= self.rare_max:
+                out.add(c)
+                out |= {x for x in self.dx_display.get(c, ()) if len(x) >= 4}
+        return tuple(sorted(out, key=lambda x: -len(x)))
 
     def ctx_for(self, d: DocState, u: Unit) -> Ctx:
         info = self.cl_info.get(u.cluster)
@@ -789,7 +841,9 @@ class Pipeline:
             return Ctx(None, info["shift"], d.order or self.global_order)
         if not info or not info["ident"]:
             return Ctx(order=d.order or self.global_order)
-        return Ctx(info["psn"], info["shift"], d.order or self.global_order, info["skels"], info["ids"], info["cores"], True, info["names"])
+        c = Ctx(info["psn"], info["shift"], d.order or self.global_order, info["skels"], info["ids"], info["cores"], True, info["names"])
+        c.rare = info.setdefault("rare", self._rare_terms(u.cluster))
+        return c
 
     def ctx_from_string(self, s: str, d: DocState) -> Ctx:
         """Best-effort cluster resolution for a header / key / filename via embedded ids."""
@@ -866,6 +920,9 @@ class Pipeline:
             pos = s.end
         out.append(text[pos:])
         t = "".join(out)
+        for term in ctx.rare:
+            t, n = re.subn(re.escape(term), "[RARE CONDITION]", t, flags=re.I)
+            self.entities["RARE_CONDITION"] += n
         t = _PSN_REPEAT.sub(r"\1", t)
         if not plain:
             t, n = band_ages_in_text(t)

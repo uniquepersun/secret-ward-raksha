@@ -3,7 +3,9 @@
 # values (drugs, doses, labs, diagnoses, stay length) are never touched.
 age_band_years: 10         # truthful bands that always contain the real age (5-year bands re-identified 71% of patients, 10-year 33%)
 age_topcode: 75            # open-ended "75+" band: the very old are unique in a small area
-date_shift_max_days: 180   # every date of one patient moves by the same secret HMAC offset (stay lengths stay exact)
+date_shift_max_days: 365   # every date of one patient moves by the same secret HMAC offset (stay lengths stay exact)
+date_shift_min_days: 90    # never less than ~3 months, so the visit month and usually the year an attacker may know no longer match
+rare_dx_max_patients: 1    # a condition held by at most this many patients is generalised away for them (it singles them out)
 tehsil_level: 0            # 1 keeps the tehsil, 0 generalises location to district only
 pin_digits: 0              # digits of the PIN code kept (6-digit PINs are always removed); 0 drops it
 min_group_size: 5          # reserved for rare-combination suppression

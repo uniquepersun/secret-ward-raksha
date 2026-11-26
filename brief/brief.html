@@ -57,7 +57,7 @@ Hidden places (file names, headers, JSON keys, metadata, base64 attachments) tak
 <li><b>Linkage and pseudonyms.</b> Merge on a shared strong id, a phone plus compatible name, or one full name plus a corroborating fact (DOB, relative, village + age). <b>Vetoes</b> forbid two Aadhaar
 numbers, two sexes, ages &gt;2 y apart, two DOBs or incompatible names in one cluster, so homonyms stay apart. Pseudonym = <code>PSN-</code> + base32(HMAC-SHA256(secret, cluster key)),
 written inside the cleaned record. A lone phone never creates an identity.</li>
-<li><b>Privacy layer.</b> One secret HMAC date shift (+-180 d) per patient across every date format, so stay lengths are exact; truthful 10-year age bands (<code>75+</code> top-code);
+<li><b>Privacy layer.</b> One secret HMAC date shift per patient (90-365 days, never near zero) across every date format, so stay lengths are exact and the visit month an attacker may know no longer matches; a condition held by a single patient is generalised (<code>[RARE CONDITION]</code>); truthful 10-year age bands (<code>75+</code> top-code);
 village, house, ward, mohalla, landmark, PIN and tehsil removed, district kept.</li>
 <li><b>Security.</b> All intermediates live in memory (no temp files, nothing to encrypt or clean); the secret is read from the environment only; exceptions print the type only; stdout carries counts only;
 quarantined files are never copied; the input is never modified.</li>
@@ -75,7 +75,7 @@ quarantined files are never copied; the input is never modified.</li>
 <tr><th>Measure</th><th>Practice</th><th>Mutated: unseen names, headers, columns, phones, ids</th><th>Mutated + hard: labels, date formats</th></tr>
 <tr><td>personal data still visible (overall / Latin / Hindi / Hinglish)</td><td class="n">0.0 % (0 of 3,230) / 0 / 0 / 0</td><td class="n">0.0 - 0.1 %</td><td class="n">0.0 %</td></tr>
 <tr><td>canaries found</td><td class="n">0 of 4</td><td class="n">0 of 4</td><td class="n">0 of 4</td></tr>
-<tr><td>medical values kept</td><td class="n">100.0 % (4,855)</td><td class="n">100.0 %</td><td class="n">100.0 %</td></tr>
+<tr><td>medical values kept</td><td class="n">99.2 % (4,817 of 4,855)</td><td class="n">100.0 %</td><td class="n">100.0 %</td></tr>
 <tr><td>linking precision / recall / F0.5 (wrong merges)</td><td class="n">1.00 / 0.91 / 0.99 (0)</td><td class="n">1.00 / 0.79 / 0.95 (0)</td><td class="n">1.00 / 0.84 / 0.96 (0)</td></tr>
 <tr><td>run time / peak memory</td><td class="n">4.5 s / 41 MB</td><td class="n">4.6 s</td><td class="n">4.6 s</td></tr>
 </table>
@@ -95,7 +95,7 @@ because the generalisation part is 10 % of the 20-point utility score, and priva
 <ul>
 <li>No OCR: scanned PDFs / images and XML are quarantined (safe, but their content is lost); legacy-font Hindi is not decoded.</li>
 <li>A name with no textual cue and absent from every structured field is found only by the rare-pair rule and can be missed.</li>
-<li>Rare diagnoses are kept because they are medical values, so a targeted attack using a known rare condition still partly succeeds (simulated 0.21 of the raw 1.00).</li>
+<li>Only conditions held by one patient are generalised (0.8 % of medical values; simulated targeted attack 0.24 to 0.15); rare procedures without an ICD code and conditions shared by two patients are kept.</li>
 <li>dd/mm vs mm/dd is inferred per hospital from unambiguous dates; a hospital with none falls back to the global majority. JSON ages become band strings (a value-type change).</li>
 <li>Fuzzing found and fixed real faults late (a record listing many patients bridged two clusters; two clusters could share one pseudonym); a time budget now guarantees a valid report, but more edge cases may exist. Thresholds were tuned on one synthetic generator plus our own mutations; the hidden unseen-format dataset may still contain surprises. No LLM, no pretrained model and no external dataset is used.</li>
 </ul>

@@ -21,6 +21,7 @@ precision / recall / F0.5 (wrong merges), reid = simulated share of patients re-
 | 12 | red-team round 2: digit words (English / Hindi), letter-spaced names, cue-less names in prose | 28 / 28 adversarial cases | leak 0.0 | caught my own regressions: URL filter deleted by a bad slice, UUID read as Aadhaar, header names; `tools/check_fhir.py` added |
 | 13 | hostile input: EICAR, PE / ELF / Mach-O, scripts, archives, Office, active content, symlink, FIFO, binary attachments, formula injection | all quarantined or neutralised, exit 0 | | static inspection only; no `urllib` import left (the organisers' audit flags network use); practice still quarantines the same 6 files |
 | 14 | sandbox hardening: hash-pinned requirements, bomb masking, per-call regex timeouts, resource limits, write confinement | 324 flood inputs: worst 0.42 s (was 244 s) | | SIGALRM cannot interrupt a regex in C, so the first timeout design was ineffective; fixed with the regex module's own `timeout` |
+| 15 | quasi-identifiers: date shift 90-365 d (never small) + single-patient conditions generalised | medical 99.2 %, targeted 0.24 -> 0.15, link F0.5 0.98 | hard tier: leak 0.0, medical 99.2 % | threshold 2 cost more medical data (98.0 %) for no extra gain |
 
 Privacy policy grid (attacker_sim, practice data; raw: reid 0.98, record linkage 0.58):
 
