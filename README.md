@@ -14,7 +14,7 @@ standard library. Peak memory ~40 MB and ~4.5 s on the practice set; ~47 s and 1
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt        # setup (network allowed)
 RAKSHA_SECRET=practice .venv/bin/python main.py --input <dir> --output <dir>   # run (no network)
-.venv/bin/python -m unittest discover -s tests                            # 21 tests, ~6 s
+.venv/bin/python -m unittest discover -s tests                            # 26 tests, ~4 s
 ```
 
 `RAKSHA_SECRET` keys the pseudonyms and the per-patient date shifts. It is read from the environment only and is never
@@ -97,6 +97,21 @@ Simulated attacker (`tools/attacker_sim.py`, our approximation of the published 
 data); record-linkage risk 0.07 (0.58 on raw in our sim). Non-PII token retention 98.5 %; intervals exact in all 21 multi-date
 documents. The mutated sets come from `tools/mutate.py`: every name swapped for an unseen one, headers and keys renamed (English,
 Hinglish, Hindi), columns shuffled, phones and ids reformatted, labels and date formats changed, with a matching rewritten truth file.
+
+## Hostile-input defence (static only: nothing is ever executed, imported, unpacked or opened)
+
+`raksha/security.py` inspects every file's **bytes** before it is parsed, and quarantines (never copies) anything that fails:
+a SHA-256 **blocklist** (`data/known_bad_sha256.txt`), the antivirus test signature (also in UTF-16), executable and archive magic
+bytes (PE, ELF, Mach-O, zip / rar / 7z / gz / bz2 / xz, OLE Office files, PDF, images), shebang scripts, and active content inside text
+(`<script>`, PHP tags, PowerShell / `cmd /c`, download-and-pipe-to-shell, VBA auto-open). Symlinks and special files (pipes, devices) are
+never followed or opened, files over 100 MB are quarantined, and archives are never extracted (no zip bombs). Base64 attachments inside
+JSON or text are decoded **in memory only to inspect them**: a binary or hostile payload is replaced by a placeholder, never passed
+through. Spreadsheet formula injection (`=cmd|...`, `@SUM(...)`, `=HYPERLINK(...)`) in a CSV cell is neutralised with a leading `'`.
+Reason codes: `known_malware_hash`, `malware_signature`, `executable_content`, `script_content`, `archive_not_extracted`,
+`office_container`, `active_content`, `symlink`, `special_file`, `too_large`.
+
+Deliberately **not** done: live hash-reputation lookups (VirusTotal and similar). Any network call during `run` is grounds for
+disqualification, so the blocklist is a local file; extend it during `setup` if a larger offline list is wanted.
 
 ## Adversarial hardening
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import base64
 import html as _html
-import urllib.parse as _urlp
 import binascii
 import csv
 import hashlib
@@ -20,7 +19,7 @@ from typing import Any
 
 import regex as rx
 
-from . import lex, privacy
+from . import lex, privacy, security
 from .columns import HDR_DOCTOR, infer_role, is_namey
 from .detect import Lexicon, Span, doctor_names, find_spans
 from .link import Ev, Linker, name_set, partial
@@ -28,7 +27,7 @@ from .privacy import band, band_age_value, band_ages_in_text, infer_order, parse
 from .translit import ascii_digits, clean, has_deva, skeleton
 
 CSV_EXT, JSON_EXT, TEXT_EXT = {".csv", ".tsv"}, {".json"}, {".txt", ".text", ".log", ".md"}
-MAX_BYTES = 200 * 1024 * 1024
+MAX_BYTES = 100 * 1024 * 1024   # larger files are quarantined (memory budget is 4 GB)
 _DR = re.compile(r"(?i)^\s*(?:dr|doctor|डॉ|डा|डॉक्टर)\b")
 _B64 = re.compile(r"^[A-Za-z0-9+/]{24,}={0,2}$")
 _B64RUN = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{24,}={0,2}(?![A-Za-z0-9+/=])")
@@ -190,9 +189,22 @@ class Pipeline:
 
     # =========================================================================== load
     def load_all(self):
-        for path in sorted(p for p in self.inp.rglob("*") if p.is_file()):
+        found = []
+        for dp, dns, fns in os.walk(self.inp, followlinks=False):
+            dns.sort()
+            for fn in sorted(fns):
+                found.append(Path(dp) / fn)
+        for path in sorted(found):
             rel = path.relative_to(self.inp).as_posix()
+            if path.is_symlink() or not path.is_file():
+                # never follow a link out of the input folder, never open a device / pipe / socket
+                self.docs.append(DocState(rel, hashlib.sha256(b"").hexdigest(), path.suffix.lower(), status="quarantined",
+                                          reason="symlink" if path.is_symlink() else "special_file"))
+                continue
             try:
+                if path.stat().st_size > MAX_BYTES:
+                    self.docs.append(DocState(rel, self._sha_stream(path), path.suffix.lower(), status="quarantined", reason="too_large"))
+                    continue
                 raw = path.read_bytes()
             except OSError:
                 self.docs.append(DocState(rel, "0" * 64, path.suffix.lower(), status="quarantined", reason="unreadable"))
@@ -206,9 +218,21 @@ class Pipeline:
                 d.status, d.reason = "quarantined", "parse_error"
             self.docs.append(d)
 
+    @staticmethod
+    def _sha_stream(path: Path) -> str:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
     def _parse(self, d: DocState, raw: bytes):
         if not raw.strip():
             d.status, d.reason = "quarantined", "empty_file"
+            return
+        threat = security.inspect(raw)          # static byte inspection only: hash blocklist, signatures, magic, active content
+        if threat:
+            d.status, d.reason = "quarantined", threat
             return
         if len(raw) > MAX_BYTES or looks_binary(raw):
             d.status, d.reason = "quarantined", "unsupported_format"
@@ -872,7 +896,7 @@ class Pipeline:
         """HTML entities, %-encoding and \\uXXXX escapes: if decoding exposes PII the decoded text is used."""
         if not any(x in text for x in ("&#", "&amp;", "%", "\\u", "&lt", "&gt", "&quot")):
             return text
-        alt = _UESC.sub(lambda m: chr(int(m.group(1), 16)), _urlp.unquote(_html.unescape(text)))
+        alt = _UESC.sub(lambda m: chr(int(m.group(1), 16)), security.percent_decode(_html.unescape(text)))
         if alt == text:
             return text
         alt = clean(alt)
@@ -962,7 +986,7 @@ class Pipeline:
             new = []
             for j, v in enumerate(row):
                 role = d.roles[j] if j < len(d.roles) else "KEEP"
-                new.append(self.scrub_cell(role, v, ctx))
+                new.append(security.neutralise_cell(self.scrub_cell(role, v, ctx)))
             w.writerow(new)
         return buf.getvalue()
 
@@ -1082,9 +1106,17 @@ class Pipeline:
 
     def _try_b64(self, s: str, d: DocState, ctx: Ctx):
         try:
-            raw = base64.b64decode(s + "=" * (-len(s) % 4), validate=False)
+            raw = base64.b64decode(s + "=" * (-len(s) % 4), validate=True)
+        except (binascii.Error, ValueError):
+            return None
+        threat = security.inspect_payload(raw)
+        if threat and (len(s) >= 64 or threat != "binary_attachment"):
+            # a binary or hostile attachment is never copied through: replaced by a placeholder of the same kind
+            self.entities["ATTACHMENT_REMOVED"] += 1
+            return base64.b64encode(b"[ATTACHMENT REMOVED]").decode("ascii")
+        try:
             txt = raw.decode("utf-8")
-        except (binascii.Error, ValueError, UnicodeDecodeError):
+        except UnicodeDecodeError:
             return None
         if not txt or sum(c.isprintable() or c in "\r\n\t" for c in txt) / len(txt) < 0.95:
             return None

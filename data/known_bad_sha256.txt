@@ -1,0 +1,6 @@
+# Offline hash blocklist (one SHA-256 per line, "#" starts a comment). The run never queries the internet.
+# Public antivirus *test* files from eicar.org: harmless, but flagged by every scanner, so they must never be exported.
+275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f   # eicar.com / eicar.com.txt (68 bytes)
+2546dcffc5ad854d4ddc64fbf056871cd5a00f2471cb7a5bfd4ac23b6e9eedad   # eicar_com.zip
+e1105070ba828007508566e28a2b8d4c65d192e9eaf3b7868382b7cae747b397   # eicarcom2.zip (zip within zip)
+# To extend offline: append hashes here during `setup` (network allowed there), e.g. from a public feed you trust.

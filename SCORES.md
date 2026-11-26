@@ -19,6 +19,7 @@ precision / recall / F0.5 (wrong merges), reid = simulated share of patients re-
 | 10 | index docs cannot bridge; unique pseudonym per cluster; age veto 4 y | link P1.00/R0.91/F0.5 0.99 (0) | hard tier: P1.00/R0.84/F0.5 0.96 (0) | `patient_index.json` listed many patients' ids and merged two clusters; a vetoed merge left two clusters with one id and thus one pseudonym |
 | 11 | red-team round 1: entities, hex, base64 (nested), `\u` escapes, full-width, homoglyphs, lowercase names, split phones, PII in URLs | 7 leaks found and fixed | | decoded views are used when they expose PII; NFKC + homoglyph fold |
 | 12 | red-team round 2: digit words (English / Hindi), letter-spaced names, cue-less names in prose | 28 / 28 adversarial cases | leak 0.0 | caught my own regressions: URL filter deleted by a bad slice, UUID read as Aadhaar, header names; `tools/check_fhir.py` added |
+| 13 | hostile input: EICAR, PE / ELF / Mach-O, scripts, archives, Office, active content, symlink, FIFO, binary attachments, formula injection | all quarantined or neutralised, exit 0 | | static inspection only; no `urllib` import left (the organisers' audit flags network use); practice still quarantines the same 6 files |
 
 Privacy policy grid (attacker_sim, practice data; raw: reid 0.98, record linkage 0.58):
 
