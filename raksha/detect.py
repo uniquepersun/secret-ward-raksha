@@ -285,7 +285,7 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
             if _DATEISH.match(m.group(0).strip()):
                 continue
             s, e = m.start(), m.end()
-            while s < e and v[s] in " (":
+            while s < e and v[s] == " ":
                 s += 1
             add(s, e, "ID", "NUMBER", 2)
     for m in _LABELLED_ID.finditer(v):

@@ -21,7 +21,7 @@ import regex as rx
 from . import lex, privacy
 from .columns import HDR_DOCTOR, infer_role, is_namey
 from .detect import Lexicon, Span, doctor_names, find_spans
-from .link import Ev, Linker, name_set
+from .link import Ev, Linker, name_set, partial
 from .privacy import band, band_age_value, band_ages_in_text, infer_order, parse_date_value, shift_text_dates
 from .translit import ascii_digits, clean, has_deva, skeleton
 
@@ -63,10 +63,11 @@ class DocState:
 
 class Ctx:
     """Per-record scrub context."""
-    __slots__ = ("psn", "shift", "order", "skels", "ids", "cores", "ident")
+    __slots__ = ("psn", "shift", "order", "skels", "ids", "cores", "ident", "names")
 
-    def __init__(self, psn=None, shift=None, order="dmy", skels=frozenset(), ids=frozenset(), cores=frozenset(), ident=False):
+    def __init__(self, psn=None, shift=None, order="dmy", skels=frozenset(), ids=frozenset(), cores=frozenset(), ident=False, names=()):
         self.psn, self.shift, self.order, self.skels, self.ids, self.cores, self.ident = psn, shift, order, skels, ids, cores, ident
+        self.names = names
 
 
 NOCTX = Ctx()
@@ -503,6 +504,9 @@ class Pipeline:
             ev.phones = set()
         if len(ev.names) > 5:
             ev.names, ev.rels = [], []
+        # two mutually incompatible patient names in one record = a multi-patient note: its names cannot define one identity
+        if any(not partial(x, y) for i, x in enumerate(ev.names) for y in ev.names[i + 1:]):
+            ev.names, ev.rels = [], []       # names are ambiguous here; ids still link the note to its patient
         return ev
 
     def _evidence_for(self, d: DocState):
@@ -534,6 +538,7 @@ class Pipeline:
                         if isinstance(v, str) and role in ("TEXT", "ADDRESS", "KEEP") and " " in v:
                             texts.append(v)
                     ev = self._ev_from_pairs(pairs, order)
+                    texts += self._kv_texts(u.node)
                     for (role, _), toks in sorted(groups.items(), key=lambda kv: str(kv[0])):
                         toks = [t for t in toks if not _DR.match(t)]
                         if toks:
@@ -704,7 +709,7 @@ class Pipeline:
             weak = any(evs[i].phones or evs[i].cores for i in idx)
             self.cl_info[r] = {"key": key, "ident": ident, "psn": privacy.pseudonym(key) if ident else None,
                                "shift": privacy.shift_days(key, self.age_max) if (ident or weak) else None,
-                               "skels": skels, "ids": frozenset(ids), "cores": frozenset(cores), "n": len(idx)}
+                               "skels": skels, "ids": frozenset(ids), "cores": frozenset(cores), "n": len(idx), "names": tuple(set(names))}
             for i in idx:
                 units[i][1].cluster = r
             for k in ids:
@@ -718,7 +723,7 @@ class Pipeline:
             return Ctx(None, info["shift"], d.order or self.global_order)
         if not info or not info["ident"]:
             return Ctx(order=d.order or self.global_order)
-        return Ctx(info["psn"], info["shift"], d.order or self.global_order, info["skels"], info["ids"], info["cores"], True)
+        return Ctx(info["psn"], info["shift"], d.order or self.global_order, info["skels"], info["ids"], info["cores"], True, info["names"])
 
     def ctx_from_string(self, s: str, d: DocState) -> Ctx:
         """Best-effort cluster resolution for a header / key / filename via embedded ids."""
@@ -734,7 +739,7 @@ class Pipeline:
                             break
             if r is not None and self.cl_info[r]["ident"]:
                 info = self.cl_info[r]
-                return Ctx(info["psn"], None, d.order or self.global_order, info["skels"], info["ids"], info["cores"], True)
+                return Ctx(info["psn"], None, d.order or self.global_order, info["skels"], info["ids"], info["cores"], True, info["names"])
         return Ctx(order=d.order or self.global_order)
 
     # =========================================================================== scrubbing
@@ -745,8 +750,11 @@ class Pipeline:
         if k == "NAME":
             toks = [t for t in re.split(r"[\s.]+", seg) if t]
             sk = {skeleton(t) for t in toks if skeleton(t)}
-            core = {s for s in sk if s not in self.lx.generic_skels} or sk
-            if ctx.psn and r != "relative" and (core & ctx.skels or (not ctx.skels and r == "patient")):
+            core = frozenset({s for s in sk if s not in self.lx.generic_skels} or sk)
+            # only a name that matches one of THIS patient's own names takes the pseudonym; a wife, a visitor or another
+            # patient mentioned in the same note is just [NAME]
+            own = any(partial(core, n) for n in ctx.names) if ctx.names else (r == "patient")
+            if ctx.psn and r != "relative" and core and own:
                 return ctx.psn
             return br("NAME")
         if k == "ID":
@@ -887,8 +895,13 @@ class Pipeline:
     def scrub_header(self, h: str, d: DocState) -> str:
         h = clean(h)
         ctx = self.ctx_from_string(h, d)
-        t = self.scrub_text(h, ctx, dates=False, loose=False)
-        return t
+        spans = [sp for sp in find_spans(h, self.lx, loose=False) if sp.kind == "ID" or (sp.kind == "NAME" and sp.prio >= 6)]
+        out, pos = [], 0
+        for sp in spans:
+            out += [h[pos:sp.start], self.placeholder(sp, h[sp.start:sp.end], ctx, False)]
+            pos = sp.end
+        out.append(h[pos:])
+        return _PSN_REPEAT.sub(r"\1", "".join(out))
 
     def render_text(self, d: DocState) -> str:
         u = d.units[0]
@@ -905,6 +918,21 @@ class Pipeline:
 
     LABEL_KEYS = ("field", "key", "label", "attribute", "attr", "question", "prompt", "fieldname", "field_name")
     VALUE_KEYS = ("value", "val", "answer", "response", "data", "text")
+
+    def _kv_texts(self, node, depth=0) -> list:
+        out = []
+        if depth > 12:
+            return out
+        if isinstance(node, dict):
+            kv = self._kv_pair(node)
+            if kv:
+                out.append(f"{node[kv[0]]}: {node[kv[1]]}")
+            for v in node.values():
+                out += self._kv_texts(v, depth + 1)
+        elif isinstance(node, list):
+            for x in node:
+                out += self._kv_texts(x, depth + 1)
+        return out
 
     def _kv_pair(self, node: dict):
         """{"field": "Patient Name", "value": "..."}: the sibling label decides how the value is read."""
