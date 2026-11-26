@@ -26,6 +26,7 @@ HDR_NONPERSON = _H(r"hospital|facility|lab|test|drug|medic|ward|dept|department|
 HDR_DOCTOR = _H(r"doctor|consultant|physician|practitioner|referr?ed.?by|ref.?doctor|author|\bdr\b|surgeon|डॉक्टर")
 HDR_ENC = _H(r"trip|sample|\bbill|invoice|visit|claim|ticket|order|receipt|serial|batch|encounter|appointment|token|\bticket\b")
 HDR_PATID = _H(r"uhid|mrn|patient|\bpt\b|hosp(?:ital)?.?id|reg(?:istration)?.?no|पंजीकरण|यूएचआईडी")
+HDR_MEASURE = _H(r"amount|\bamt\b|price|cost|fee|total|charge|\binr\b|\brs\b|qty|quantity|count|value|result|score|weight|height|dose|duration|\bdays?\b|temp|pulse|bmi|sugar|rate|balance|paid|due|discount|tax")
 HDR_CODE = _H(r"package|procedure|code|coding|loinc|snomed|icd|cpt|system|schema|version|\bunit\b|range")
 HDR_PHONE = _H(r"phone|mobile|mob\b|cell|contact|tel|callback|whatsapp|फोन|मोबाइल|संपर्क|दूरभाष")
 HDR_AADHAAR = _H(r"aadhaar|aadhar|adhar|uid\b|आधार")
@@ -125,6 +126,8 @@ def infer_role(header: str, values: list, known_names=None) -> str:
     if _share(dv, lambda v: bool(_ID_V.match(v)) and len(v) >= 6) >= 0.7:
         if HDR_CODE.search(h) and not HDR_HID.search(h):
             return "KEEP"
+        if HDR_MEASURE.search(h) and not HDR_PATID.search(h) and not HDR_HID.search(h.replace("id", "", 1) if False else ""):
+            return "NUM"           # amounts, counts and measurements are numbers, not identifiers
         if HDR_ENC.search(h) and not HDR_PATID.search(h):
             return "ENCID"      # trip / bill / visit / ticket ids: redacted, but they do not identify a patient
         return "HID" if not HDR_INSID.search(h) else "INSID"

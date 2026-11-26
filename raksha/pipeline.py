@@ -64,6 +64,7 @@ class DocState:
     status: str = "sanitized"
     reason: str = ""
     out_rel: str | None = None
+    jsonl: bool = False
 
 
 class Ctx:
@@ -233,19 +234,24 @@ class Pipeline:
             try:
                 d.data = json.loads(text)
             except (ValueError, RecursionError):
-                if d.ext in JSON_EXT:
+                d.data = None
+                lines = [l for l in text.splitlines() if l.strip()]
+                if len(lines) >= 2:
+                    try:                                  # JSON Lines: one object per line, written back the same way
+                        d.data = [json.loads(l) for l in lines]
+                        d.jsonl = True
+                    except (ValueError, RecursionError):
+                        d.data = None
+                if d.data is None and d.ext in JSON_EXT:
                     d.status, d.reason = "quarantined", "malformed_json"
                     return
-                d.data = None
             if d.data is not None:
                 d.kind = "json"
                 self._json_units(d)
                 return
         if d.ext in CSV_EXT:
             delim = "\t" if d.ext == ".tsv" else ","
-            first = text.split("\n", 1)[0]
-            if first.count("\t") > first.count(",") and d.ext == ".csv":
-                delim = "\t"
+            delim = self._sniff_delim(text, delim)
             d.delim, d.kind = delim, "csv"
             rows = list(csv.reader(io.StringIO(text, newline=""), delimiter=delim))
             if not rows:
@@ -256,6 +262,24 @@ class Pipeline:
             return
         d.kind = "text"
         d.units = [Unit("doc")]
+
+    @staticmethod
+    def _sniff_delim(text: str, default: str) -> str:
+        """Pick the delimiter that gives the most consistent multi-column rows over the first lines."""
+        lines = [l for l in text.splitlines()[:30] if l.strip()]
+        best, score = default, -1.0
+        for dl in (default, ",", ";", "\t", "|"):
+            try:
+                counts = [len(r) for r in csv.reader(io.StringIO("\n".join(lines)), delimiter=dl)]
+            except csv.Error:
+                continue
+            if not counts or max(counts) < 2:
+                continue
+            mode = max(set(counts), key=counts.count)
+            sc = counts.count(mode) / len(counts) + 0.01 * mode - (0.2 if dl != default else 0)
+            if sc > score:
+                best, score = dl, sc
+        return best
 
     def _json_units(self, d: DocState):
         data = d.data
@@ -921,6 +945,8 @@ class Pipeline:
             return sv if int(privacy.POLICY["tehsil_level"]) else "[TEHSIL]"
         if role in ("SEX", "DISTRICT"):
             return sv
+        if role == "NUM" and re.fullmatch(r"[\d.,\s\-]+", sv):
+            return sv
         hint = ""
         return self.scrub_text(sv, ctx, hint)
 
@@ -1033,6 +1059,8 @@ class Pipeline:
         role = self.json_roles.get(sig_join(parts), "KEEP")
         if isinstance(node, (int, float)):
             digs = re.sub(r"\D", "", str(int(node))) if isinstance(node, int) or float(node).is_integer() else ""
+            if role == "NUM":
+                return node
             if role in ("PHONE", "AADHAAR", "ABHA", "HID", "ENCID", "INSID", "PAN") or (len(digs) >= 10 and abs(node) >= 10 ** 9):
                 self.entities[role if role != "KEEP" else "NUMBER"] += 1
                 return 0
@@ -1072,6 +1100,8 @@ class Pipeline:
         else:
             # records get their own context; the surrounding structure is walked with the doc context
             res = self._walk_with_units(data, d)
+        if d.jsonl and isinstance(res, list):
+            return "\n".join(json.dumps(x, ensure_ascii=False) for x in res) + "\n"
         return json.dumps(res, ensure_ascii=False, indent=2) + "\n"
 
     def _walk_with_units(self, data, d: DocState):
