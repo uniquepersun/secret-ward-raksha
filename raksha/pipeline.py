@@ -650,8 +650,10 @@ class Pipeline:
                 i0 = min(idx, key=lambda i: (units[i][0].rel, units[i][1].loc))
                 key = f"{units[i0][0].rel}|{units[i0][1].loc}"
             skels = frozenset(s for nm in names for s in nm if s not in self.lx.generic_skels) or frozenset(s for nm in names for s in nm)
+            # records that carry a phone / id fragment but no patient identity still get their dates shifted
+            weak = any(evs[i].phones or evs[i].cores for i in idx)
             self.cl_info[r] = {"key": key, "ident": ident, "psn": privacy.pseudonym(key) if ident else None,
-                               "shift": privacy.shift_days(key, self.age_max) if ident else None,
+                               "shift": privacy.shift_days(key, self.age_max) if (ident or weak) else None,
                                "skels": skels, "ids": frozenset(ids), "cores": frozenset(cores), "n": len(idx)}
             for i in idx:
                 units[i][1].cluster = r
@@ -662,6 +664,8 @@ class Pipeline:
 
     def ctx_for(self, d: DocState, u: Unit) -> Ctx:
         info = self.cl_info.get(u.cluster)
+        if info and not info["ident"] and info["shift"] is not None:
+            return Ctx(None, info["shift"], d.order or self.global_order)
         if not info or not info["ident"]:
             return Ctx(order=d.order or self.global_order)
         return Ctx(info["psn"], info["shift"], d.order or self.global_order, info["skels"], info["ids"], info["cores"], True)
