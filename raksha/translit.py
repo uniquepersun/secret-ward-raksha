@@ -18,9 +18,13 @@ _DIGIT_TABLE = str.maketrans(_IND)
 _ZW = dict.fromkeys(map(ord, "​‌‍⁠﻿"), None)
 
 
+_HOMO = str.maketrans("\u0430\u0435\u043e\u0440\u0441\u0445\u0443\u0456\u0458\u043a\u043c\u043d\u0442\u0410\u0412\u0415\u041a\u041c\u041d\u041e\u0420\u0421\u0422\u0425\u0391\u0392\u0395\u0396\u0397\u0399\u039a\u039c\u039d\u039f\u03a1\u03a4\u03a7\u03bf",
+                      "aeopcxyijkmntABEKMNOPCTXABEZHIKMNOPTXo")
+
+
 def clean(s: str) -> str:
-    """Strip zero-width chars and normalise to NFC (output text is always NFC)."""
-    return unicodedata.normalize("NFC", s.translate(_ZW))
+    """Strip zero-width chars, fold look-alike Cyrillic/Greek letters to Latin, normalise to NFKC (full-width -> ASCII)."""
+    return unicodedata.normalize("NFKC", s.translate(_ZW).translate(_HOMO))
 
 
 def ascii_digits(s: str) -> str:

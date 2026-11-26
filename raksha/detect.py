@@ -34,6 +34,7 @@ _LABELLED_ID = rx.compile(r"(?i)(?<![A-Za-z])(?:uhid|mrn|ipd(?:\s*no)?|opd(?:\s*
 _DIGITS_AFTER_NAME = rx.compile(r"(?<=[A-Za-z\u0900-\u097F_])_(\d{4,})(?!\d)")
 _MEDCODE = rx.compile(r"^(?:[A-Z]\d{2}(?:\.\d+)?|\d{3,5}-\d|[A-Z]{1,3}\d{2,3}[A-Z]?)$")  # ICD / LOINC / package codes
 _PHONE_CUE = rx.compile(r"(?i)(?:mob(?:ile)?|ph(?:one)?|tel|contact|cell|call|whatsapp|no\.?)\s*[:.\-]?\s*$")
+_SPLIT_PHONE = rx.compile(r"(?<![\d])[6-9]\d{4}[ \t]*\r?\n[ \t]*\d{5}(?![\d])")
 _URL = rx.compile(r"(?i)\b(?:https?://|www\.)[^\s\"'<>)\]]+|(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])")  # URLs and UUIDs are never PII
 _DATEISH = rx.compile(r"^\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4}$")
 
@@ -288,6 +289,8 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
             while s < e and v[s] == " ":
                 s += 1
             add(s, e, "ID", "NUMBER", 2)
+    for m in _SPLIT_PHONE.finditer(v):
+        add(m.start(), m.end(), "ID", "NUMBER", 2)
     for m in _LABELLED_ID.finditer(v):
         add(m.start(1), m.end(1), "ID", "LABELLED", 2)
     for m in _ALNUM_ID.finditer(v):
@@ -391,7 +394,8 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
                 hit = lx.name_skels[sk]
         else:
             nxt = toks_all[ti + 1].group(0).casefold() if ti + 1 < len(toks_all) else ""
-            lower_ok = (not t[:1].isupper()) and tl in lx.name_tokens and nxt in lex.HONORIFIC_POST and len(t) >= 3
+            lower_ok = (not t[:1].isupper()) and tl in lx.name_tokens and len(t) >= 3 and (
+                nxt in lex.HONORIFIC_POST or (len(t) >= 5 and not lex.known_nonname(t)))
             if (not (t[:1].isupper()) and not lower_ok) or lex.known_nonname(t) or tl in lex.STOP_NAME_TOKENS:
                 continue
             if t == "ASHA" and ti + 1 < len(toks_all) and toks_all[ti + 1].group(0).lower() in ("worker", "workers", "didi", "sahayika", "program", "scheme", "visit", "kiran"):
@@ -431,7 +435,15 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
         if (seed >= 1 and df <= 4) or (df <= 3 and all(len(t) >= 3 for t in toks)):
             add(m.start(1), m.end(1), "NAME", "other", 7)
 
-    spans = [sp for sp in spans if not any(sp.start >= us and sp.end <= ue for us, ue in urls)]
+    def _in_url(sp):
+        if not any(sp.start >= us and sp.end <= ue for us, ue in urls):
+            return False
+        if re.fullmatch(r"(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", text[sp.start:sp.end]):
+            return True
+        # a phone / e-mail / PAN / known name inside a link (wa.me/9198..., mailto:) is still PII
+        keep = (sp.kind == "ID" and sp.role in ("NUMBER", "EMAIL", "PAN", "AADHAAR_MASKED")) or (sp.kind == "NAME" and sp.prio <= 6)
+        return not keep
+    spans = [sp for sp in spans if not _in_url(sp)]
     # doctors stay: protect "Dr. X Y" so neither cues nor the lexicon remove them
     prot = []
     for m in _DOCTOR_PHRASE.finditer(text):

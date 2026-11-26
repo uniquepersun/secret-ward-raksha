@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import base64
+import html as _html
+import urllib.parse as _urlp
 import binascii
 import csv
 import hashlib
@@ -29,6 +31,9 @@ CSV_EXT, JSON_EXT, TEXT_EXT = {".csv", ".tsv"}, {".json"}, {".txt", ".text", ".l
 MAX_BYTES = 200 * 1024 * 1024
 _DR = re.compile(r"(?i)^\s*(?:dr|doctor|डॉ|डा|डॉक्टर)\b")
 _B64 = re.compile(r"^[A-Za-z0-9+/]{24,}={0,2}$")
+_B64RUN = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{24,}={0,2}(?![A-Za-z0-9+/=])")
+_HEXRUN = re.compile(r"(?<![0-9A-Fa-f])(?:[0-9A-Fa-f]{2}){12,}(?![0-9A-Fa-f])")
+_UESC = re.compile(r"\\u([0-9a-fA-F]{4})")
 _PSN_REPEAT = re.compile(r"(PSN-[0-9A-Z]{8})(?:[ _\-]+\1)+")
 
 
@@ -789,6 +794,9 @@ class Pipeline:
         if not text:
             return text
         text = clean(text)
+        if not plain:
+            text = self._decode_payloads(text, ctx)
+            text = self._decoded_view(text, hint, loose)
         spans = find_spans(text, self.lx, hint, loose)
         out, pos = [], 0
         for s in spans:
@@ -805,6 +813,46 @@ class Pipeline:
                 t, n = shift_text_dates(t, ctx.shift, ctx.order)
                 self.n_generalized += n
         return t
+
+    def _decode_payloads(self, text: str, ctx: Ctx) -> str:
+        """base64 / hex blobs hiding inside plain text: decode, scrub, re-encode in the same encoding."""
+        def printable(b: bytes):
+            try:
+                t = b.decode("utf-8")
+            except UnicodeDecodeError:
+                return None
+            return t if t and sum(c.isprintable() or c in "\r\n\t" for c in t) / len(t) >= 0.95 else None
+
+        def b64(m):
+            try:
+                t = printable(base64.b64decode(m.group(0) + "=" * (-len(m.group(0)) % 4), validate=True))
+            except (binascii.Error, ValueError):
+                return m.group(0)
+            if t is None:
+                return m.group(0)
+            c = self.scrub_text(t, ctx)
+            return base64.b64encode(c.encode("utf-8")).decode("ascii") if c != t else m.group(0)
+
+        def hx(m):
+            t = printable(bytes.fromhex(m.group(0)))
+            if t is None:
+                return m.group(0)
+            c = self.scrub_text(t, ctx)
+            return c.encode("utf-8").hex() if c != t else m.group(0)
+
+        if len(text) < 24:
+            return text
+        return _HEXRUN.sub(hx, _B64RUN.sub(b64, text))
+
+    def _decoded_view(self, text: str, hint: str, loose: bool) -> str:
+        """HTML entities, %-encoding and \\uXXXX escapes: if decoding exposes PII the decoded text is used."""
+        if not any(x in text for x in ("&#", "&amp;", "%", "\\u", "&lt", "&gt", "&quot")):
+            return text
+        alt = _UESC.sub(lambda m: chr(int(m.group(1), 16)), _urlp.unquote(_html.unescape(text)))
+        if alt == text:
+            return text
+        alt = clean(alt)
+        return alt if find_spans(alt, self.lx, hint, loose) else text
 
     def scrub_cell(self, role: str, v: str, ctx: Ctx, row_extra: dict | None = None) -> str:
         if v is None or v == "":
