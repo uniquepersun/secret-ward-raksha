@@ -40,7 +40,7 @@ _DATEISH = rx.compile(r"^\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4}$")
 _HOUSE = rx.compile(rf"(?i)(?<![\w])(?:h\.?\s*no\.?|house(?:\s*no\.?)?|makan(?:\s*no\.?)?|flat(?:\s*no\.?)?|plot(?:\s*no\.?)?|"
                     rf"quarter(?:\s*no\.?)?|room\s*no\.?|मकान(?:\s*नं?\.?|\s*नंबर)?|मकान\s*सं\.?|घर\s*नं?\.?)\s*[:\-]?\s*"
                     rf"\d+[A-Za-z]?(?:[/\-]\d+[A-Za-z]?)*")
-_LOCALITY = rx.compile(rf"(?i)(?<![\w])(?:(?<=,\s*)ward\s*(?:no\.?)?\s*\d+(?!\s*\()|mohalla\s+{SEQ_TITLE}|mohalle\s+{SEQ_TITLE}|"
+_LOCALITY = rx.compile(rf"(?i)(?<![\w])(?:(?<=,\s*)ward\s*(?:no\.?)?\s*\d+(?!\s*[(/]|\s+bed\b|\s*[,\-]\s*bed\b|\s*(?:icu|ward)\b)|mohalla\s+{SEQ_TITLE}|mohalle\s+{SEQ_TITLE}|"
                        rf"colony\s+{SEQ_TITLE}|nagar\s+{SEQ_TITLE}|मोहल्ला\s+{TOK}(?:\s+{TOK}){{0,2}}|"
                        rf"वार्ड\s*(?:नं\.?)?\s*\d+|कॉलोनी\s+{TOK}(?:\s+{TOK}){{0,2}})")
 _LANDMARK = rx.compile(rf"(?i)(?<![\w])(?:near|opp(?:osite)?\.?|behind|beside|adjacent\s+to|next\s+to|nr\.?)\s+"
@@ -93,7 +93,7 @@ def _valid_run(raw: str, digits: str, groups: list) -> bool:
     if n == 10:
         return digits[0] in "6789" or (len(groups) == 1 and not plus and False)
     if n == 11:
-        return digits[0] == "0" and digits[1] in "6789"
+        return digits[0] == "0"          # 0 + mobile, or STD code + landline
     if n == 12:
         if len(groups) == 2 and len(groups[0]) >= 5 and len(groups[1]) >= 5:
             return False
