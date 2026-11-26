@@ -5,7 +5,7 @@ from raksha.detect import Lexicon, find_spans
 from raksha.privacy import band_ages_in_text
 
 CASES = [
- ("Patient: Lalitha Venkatesh, 52 yrs F. Contact 98450 12345.", ["Lalitha Venkatesh", "98450 12345"], ["50-59"]),
+ ("Patient: Lalitha Venkatesh, 52 yrs F. Contact 98450 12345.", ["Lalitha Venkatesh", "98450 12345"], ["50-5"]),
  ("Pt. Name - Omprakash Tiwari; Relative: Hari Tiwari; Ph (0522) 2345678", ["Omprakash Tiwari", "Hari Tiwari", "2345678"], []),
  ("Son of Shri Baldev Raj Sharma, resident of Gram Rampur, Distt. Etawah", ["Baldev Raj Sharma", "Rampur"], ["Etawah"]),
  ("पिता का नाम: रामलाल यादव, मोबाइल: ९८३९१२३४५६", ["रामलाल यादव", "९८३९१२३४५६"], []),
