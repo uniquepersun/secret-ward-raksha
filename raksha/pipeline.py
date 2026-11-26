@@ -494,7 +494,7 @@ class Pipeline:
                 self.lx.add_id(k)
 
     def _learn_text(self, text: str):
-        if not text or len(text) < 3:
+        if not text or len(text) < 3 or self.over_budget():
             return
         try:
             self._learn_text_inner(text)
@@ -1076,6 +1076,8 @@ class Pipeline:
         head_ctx = Ctx(order=d.order or self.global_order)
         w.writerow([self.scrub_header(h, d) for h in d.header])
         for u in d.units:
+            if self.over_budget():                     # one huge file must not outlive the run's time budget
+                raise SpanTimeout
             row = d.rows[u.node]
             ctx = self.ctx_for(d, u)
             new = []

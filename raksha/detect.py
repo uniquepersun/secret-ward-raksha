@@ -113,7 +113,7 @@ _RELWORD_BEFORE = _tc(r"(?i)(?:father|mother|husband|wife|spouse|guardian|relati
 _RELWORD_INSIDE = _tc(r"(?i)^(?:father|mother|husband|wife|spouse|guardian|relative|attendant|kin|caregiver)(?:'?s)?[\s_\-]*name")
 _DEVTOK = r"(?:[\u0900-\u097F]{2,})"
 _DEVSEQ = rf"{_DEVTOK}(?:[ \t]{{1,2}}{_DEVTOK}){{0,2}}"
-_DEV_REL = "बेटी|बेटा|पुत्र|पुत्री|भाई|बहन|माँ|मां|माता|पिता|पति|पत्नी|ससुर|सास|दादा|दादी|चाचा|चाची|मामा|मौसी|बहू|दामाद|देवर|भाभी|बच्चा|बच्ची"
+_DEV_REL = "पिताजी|पिता जी|माताजी|माता जी|बेटे|बेटों|भैया|बेटी|बेटा|पुत्र|पुत्री|भाई|बहन|माँ|मां|माता|पिता|पति|पत्नी|ससुर|सास|दादा|दादी|चाचा|चाची|मामा|मौसी|बहू|दामाद|देवर|भाभी|बच्चा|बच्ची"
 _DEV_AFTER_REL = _tc(rf"(?<![\w\p{{M}}])(?:{_DEV_REL})\s*[-:–]?\s*({_DEVSEQ})")
 _DEV_BEFORE_REL = _tc(rf"(?<![\w\p{{M}}])({_DEVSEQ})\s+(?:की|का|के)\s+(?:{_DEV_REL})(?![\w\p{{M}}])")
 _DEV_PT = _tc(rf"(?<![\w\p{{M}}])(?:रोगी|मरीज़?|पेशेंट|अटेंडेंट|परिजन|देखभालकर्ता)\s*(?:का\s*नाम)?\s*[:\-–]\s*({_DEVSEQ})")
@@ -143,6 +143,11 @@ _RELATION = _tc(rf"(?i)(?<![\w])(?:s\s*/\s*o|d\s*/\s*o|w\s*/\s*o|h\s*/\s*o|c\s*/
                        rf"husband\s+of|father|mother|guardian|spouse|relative|attendant|पुत्र|पुत्री|पत्नी|पति|सुपुत्र|"
                        rf"सुपुत्री|पिता|माता|द्वारा)\b?\.?[\s:\-]*(?:(?:name|naam|नाम)\s*(?:[:\-]\s*)?)?(?:श्री(?:मती)?\s+|mr\.?\s+|mrs\.?\s+|smt\.?\s+|shri\s+)?"
                        rf"({SEQ_TITLE})")
+_STOPW = r"(?!(?:hai|hain|he|ho|aur|and|ke|ki|ka|ko|se|is|are|was|has|with|saath|bhi|ne)(?![\p{L}\p{M}]))"
+_REL_LOW = _tc(rf"(?i)(?<![\w])(?:pita|pati|patni|bhai|behen|beti|mata|maa|attendant|father|mother|husband|wife|guardian|relative)"
+               rf"(?:\s+(?:ka|ki)\s+naam)?\s*[:\-]\s*({TOK}(?:[ \t]{{1,2}}{_STOPW}{TOK})?)|"
+               rf"(?<![\w])(?:ka|ki)\s+naam\s+({TOK}(?:[ \t]{{1,2}}{_STOPW}{TOK})?)")
+_REL_LOW2 = _tc(rf"(?i)(?<![\w])(?:beti|beta|bete)\s+({TOK})(?![\p{{L}}\p{{M}}])")
 _RELATION_LOW = _tc(rf"(?i)(?<![\w])(?:s\s*/\s*o|d\s*/\s*o|w\s*/\s*o)\b\.?[\s:\-]*({SEQ_STRONG})")
 _SUFFIX = _tc(rf"(?<![\w])({SEQ_TITLE})\s+(?:(?i:ji|sahab|saheb|sahib|bhai|bhaiya|bhaiyya|didi|behen|behan|behenji|behnji|"
                      rf"madam|mataji|bhabhi|chacha|chachi|mausi|amma|appa|anna|akka|dada|dadi|nani|nana)|जी|साहब|साहेब|भाई|भैया|दीदी|बहन|"
@@ -491,6 +496,12 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
         add_name(m.start(1), m.end(1), "relative", False, 3)
     for m in _RELATION_LOW.finditer(text):
         add_name(m.start(1), m.end(1), "relative", True, 3)
+    for m in _REL_LOW.finditer(text):
+        g = 1 if m.group(1) else 2
+        add_name(m.start(g), m.end(g), "relative", True, 3)
+    for m in _REL_LOW2.finditer(text):
+        if not lex.known_nonname(m.group(1)) and m.group(1).casefold() not in ("blocker", "blockers", "thalassemia", "agonist", "carotene", "lactam", "hcg"):
+            add_name(m.start(1), m.end(1), "relative", True, 3)
     for pat, role in ((_DEV_AFTER_REL, "relative"), (_DEV_BEFORE_REL, "relative"), (_DEV_PT, "patient")):
         for m in pat.finditer(text):
             add_name(m.start(1), m.end(1), role, True, 3)
@@ -629,22 +640,31 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
         return not keep
     spans = [sp for sp in spans if not _in_url(sp)]
     # doctors stay: protect "Dr. X Y" so neither cues nor the lexicon remove them
-    prot = []
-    for m in _DOCTOR_PHRASE.finditer(text):
-        s2, e2 = _trim_seq(text, m.start(1), m.end(1), True)
-        if e2 > s2:
-            prot.append((s2, e2))
+    prot = _doctor_spans(text)
     spans = [sp for sp in spans if not (sp.kind == "NAME" and any(sp.start < pe and sp.end > ps for ps, pe in prot))]
     return merge_names(text, _resolve(spans))
 
 
-def doctor_names(text: str) -> list[str]:
+def _doctor_spans(text: str) -> list[tuple[int, int]]:
+    """Spans of "Dr. Anil Kumar": the leading Title-case words only (max 3), never "Dr. Mehta reviewed. Mr. Naidu"."""
     out = []
     for m in _DOCTOR_PHRASE.finditer(text):
         s2, e2 = _trim_seq(text, m.start(1), m.end(1), True)
-        if e2 > s2:
-            out.append(text[s2:e2])
+        end, n = s2, 0
+        for t in _TOKEN.finditer(text, s2, e2):
+            w = t.group(0)
+            if not (w[:1].isupper() or has_deva(w)) or n >= 3:
+                break
+            end, n = t.end(), n + 1
+            if w.endswith(".") and len(w) > 2:
+                break
+        if end > s2:
+            out.append((s2, end))
     return out
+
+
+def doctor_names(text: str) -> list[str]:
+    return [text[a:b] for a, b in _doctor_spans(text)]
 
 
 def _resolve(spans: list[Span]) -> list[Span]:

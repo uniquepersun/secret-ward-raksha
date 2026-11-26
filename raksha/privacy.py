@@ -49,8 +49,9 @@ def pseudonym(key: str) -> str:
 _ISO = rx.compile(r"(?<![\d])(\d{4})-(\d{2})-(\d{2})(?:([T ])(\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(Z|[+-]\d{2}:?\d{2})?)?(?![\d])")
 _NUM = rx.compile(r"(?<![\d.])(\d{1,2})([/.\-])(\d{1,2})\2(\d{4}|\d{2})(?![\d])")
 _YMD_SLASH = rx.compile(r"(?<![\d])(\d{4})([/.])(\d{1,2})\2(\d{1,2})(?![\d])")
-_WRITTEN = rx.compile(r"(?i)(?<![\d\w])(\d{1,2})(?:st|nd|rd|th)?[\s\-]+(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?,?[\s\-]+['\u2019]?(\d{4}|\d{2})(?![\d])")
-_MONTH_YEAR = rx.compile(r"(?i)(?<![\d\w])(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?,?\s+(\d{4})(?![\d])")
+_WRITTEN = rx.compile(r"(?i)(?<![\d\w])(\d{1,2})(?:st|nd|rd|th)?[\s\-]+(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?,?(?:[\s\-]+['\u2019]?|['\u2019])(\d{4}|\d{2})(?![\d])")
+_NUM_MY = rx.compile(r"(?<![\d/.\-])(0?[1-9]|1[0-2])/(20\d{2}|19\d{2})(?![\d/])")
+_MONTH_YEAR = rx.compile(r"(?i)(?<![\d\w])(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?,?(?:\s+|\s*[-'\u2019]\s*)(\d{4})(?![\d])")
 _WRITTEN2 = rx.compile(r"(?i)(?<![\w])(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})(?![\d])")
 
 
@@ -149,6 +150,14 @@ def shift_text_dates(text: str, days: int, order: str = "dmy") -> tuple[str, int
             continue
         n = d + dt.timedelta(days=days)
         add(m, f"{mon_names[n.month - 1]} {n.year}")
+    for m in _NUM_MY.finditer(t):                # "03/2026": month and year only
+        if any(a <= m.start() < b or a < m.end() <= b for a, b in day_edits):
+            continue
+        n = _safe(int(m.group(2)), int(m.group(1)), 15)
+        if n is None:
+            continue
+        n += dt.timedelta(days=days)
+        add(m, f"{n.month:02d}/{n.year}")
     inv = {v: k for k, v in reversed(list(HI_MONTHS.items()))}
     for m in _HINDI.finditer(t):
         d = _safe(int(m.group(3)), HI_MONTHS[m.group(2)], int(m.group(1)))
