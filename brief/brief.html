@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Raksha: Track 3 Project Brief</title>
+<style>
+  @page { size: A4; margin: 11mm 12mm; }
+  * { box-sizing: border-box; }
+  body { font: 10pt/1.32 -apple-system, "Helvetica Neue", Arial, sans-serif; color: #1b1f24; margin: 0; }
+  h1 { font-size: 16pt; margin: 0 0 2px; }
+  h2 { font-size: 11pt; margin: 9px 0 3px; border-bottom: 1px solid #c8d0d8; padding-bottom: 1px; color: #0b3d62; }
+  .sub { color: #4a5560; font-size: 9.2pt; margin-bottom: 4px; }
+  p { margin: 2px 0 4px; }
+  ul { margin: 2px 0 4px 15px; padding: 0; } li { margin: 1px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 9.2pt; margin: 3px 0 5px; }
+  th, td { border: 1px solid #c8d0d8; padding: 2px 5px; text-align: left; vertical-align: top; }
+  th { background: #eef3f7; }
+  td.n { text-align: right; white-space: nowrap; }
+  .flow { display: flex; align-items: stretch; gap: 3px; margin: 4px 0 6px; font-size: 8.4pt; }
+  .box { flex: 1; border: 1px solid #0b3d62; border-radius: 4px; padding: 3px 4px; background: #f4f8fb; }
+  .box b { display: block; color: #0b3d62; font-size: 8.8pt; }
+  .arrow { align-self: center; color: #0b3d62; font-weight: bold; }
+  .out { border-color: #1d7a46; background: #f1f9f4; } .out b { color: #1d7a46; }
+  code { font: 8.6pt Menlo, monospace; background: #f1f3f5; padding: 0 2px; border-radius: 2px; }
+  .pb { page-break-before: always; }
+  .cols { display: flex; gap: 12px; } .cols > div { flex: 1; }
+</style></head><body>
+
+<h1>Raksha: an offline firewall that learns the ward's own vocabulary</h1>
+<div class="sub"><b>Track 3 · Secret Wards</b> · Team: team-secret-ward · Members: Abhay · Repo: github.com/uniquepersun/secret-ward-raksha</div>
+
+<h2>1. In one paragraph</h2>
+<p>Raksha removes every personal identifier from messy English / Hindi / Hinglish hospital exports while leaving every medical value
+byte-identical, gives each patient one keyed pseudonym across files, scripts and hospitals, and generalises the quasi-identifiers an
+attacker would join against a voter list. It is deterministic rules and vocabularies, with <b>no trained model</b>. The one idea that
+makes it robust to formats it has never seen: it <b>learns each run's own names, villages and ids from the structured fields</b> (typed by
+what the values look like, not by header text) and then finds them in free text in any script through a cross-script phonetic key.</p>
+
+<h2>2. Architecture</h2>
+<div class="flow">
+  <div class="box"><b>Ingest</b>any encoding / format; sniff; quarantine what cannot be cleaned</div><div class="arrow">&#9654;</div>
+  <div class="box"><b>Learn lexicon</b>names, villages, ids from structured fields; per-hospital date order</div><div class="arrow">&#9654;</div>
+  <div class="box"><b>Evidence</b>per record: ids, names (skeleton keys), age, sex, DOB, village</div><div class="arrow">&#9654;</div>
+  <div class="box"><b>Link</b>union-find with vetoes; HMAC pseudonym per cluster</div><div class="arrow">&#9654;</div>
+  <div class="box"><b>Scrub + generalise</b>PII spans, date shift, age band, place removal</div><div class="arrow">&#9654;</div>
+  <div class="box out"><b>Output</b><code>sanitized/</code> <code>report.json</code> <code>records.jsonl</code></div>
+</div>
+
+<h2>3. How each part works</h2>
+<ul>
+<li><b>Ingestion.</b> UTF-8 / BOM / UTF-16 / cp1252, always written as UTF-8. CSV keeps delimiter, header and ragged rows; JSON keeps structure and value types;
+FHIR stays valid R4 (all 19 bundles validate with <code>fhir.resources</code>; <code>fullUrl</code>s stay unique, references resolve). A <code>.csv</code> that is really JSON is sniffed.
+Binary, empty, malformed, 1,500-deep and XML files are quarantined with a reason code, never copied. Every file runs in its own <code>try</code>.</li>
+<li><b>Detection.</b> <i>Identifiers:</i> digit-run grouping rules for Indian phones in every written form (+91, 0-prefix, brackets, Devanagari digits, landlines), Aadhaar, ABHA, PAN, e-mail,
+masked Aadhaar, UHID / MRN / IPD / policy ids. URLs, UUIDs, ICD / LOINC codes and numeric ranges are protected. <i>Names:</i> cues (<code>Name:</code> / <code>नाम:</code>, honorifics,
+S/o D/o W/o, <code>C/O &lt;name&gt;</code> but not <code>C/O fever</code>, <code>Shahid sahab</code>, "called by"), the learned lexicon matched by a consonant skeleton
+(Mohammad = Mohd. = Md. = मोहम्मद), and a rare-pair fallback. <i>Meaning traps:</i> a negative gazetteer (drugs, diseases, eponyms, labs, units) plus context keep
+<code>Dr. Ramesh</code>, <code>ASHA worker</code>, <code>Dolo 650 BD x 5 days</code>, <code>1-0-1</code>, <code>150/90</code>, <code>Parkinson's disease</code>; a relative named Ramesh is removed.
+Hidden places (file names, headers, JSON keys, metadata, base64 attachments) take the same path.</li>
+<li><b>Linkage and pseudonyms.</b> Merge on a shared strong id, a phone plus compatible name, or one full name plus a corroborating fact (DOB, relative, village + age). <b>Vetoes</b> forbid two Aadhaar
+numbers, two sexes, ages &gt;2 y apart, two DOBs or incompatible names in one cluster, so homonyms stay apart. Pseudonym = <code>PSN-</code> + base32(HMAC-SHA256(secret, cluster key)),
+written inside the cleaned record. A lone phone never creates an identity.</li>
+<li><b>Privacy layer.</b> One secret HMAC date shift (+-180 d) per patient across every date format, so stay lengths are exact; truthful 10-year age bands (<code>75+</code> top-code);
+village, house, ward, mohalla, landmark, PIN and tehsil removed, district kept.</li>
+<li><b>Security.</b> All intermediates live in memory (no temp files, nothing to encrypt or clean); the secret is read from the environment only; exceptions print the type only; stdout carries counts only;
+quarantined files are never copied; the input is never modified.</li>
+</ul>
+
+<h2 class="pb">4. USP: what a plain PII tool does not do</h2>
+<ul>
+<li><b>Content-first typing, not header trust.</b> Renamed or Hindi headers (<code>Pt. Full Name</code>, <code>Native Place</code>, <code>संपर्क नंबर</code>) still resolve from the values; an unlabelled place column inside an address block becomes a village column.</li>
+<li><b>Cross-script identity.</b> Devanagari and Latin spellings share a phonetic key, so a name learned from a Latin registration is removed from a Hindi prescription, and the same patient links across scripts.</li>
+<li><b>Measured, not guessed, privacy.</b> The repo ships an attacker simulation; the generalisation policy was chosen from its numbers. A mutation harness (new names, headers, formats, labels, date styles) is our proxy for the unseen-format round.</li>
+</ul>
+
+<h2>5. Privacy-utility trade-off (measured, practice set; our own tools, a rough guide to the official score)</h2>
+<table>
+<tr><th>Measure</th><th>Practice</th><th>Mutated: unseen names, headers, columns, phones, ids</th><th>Mutated + hard: labels, date formats</th></tr>
+<tr><td>personal data still visible (overall / Latin / Hindi / Hinglish)</td><td class="n">0.0 % (0 of 3,230) / 0 / 0 / 0</td><td class="n">0.0 %</td><td class="n">0.0 %</td></tr>
+<tr><td>canaries found</td><td class="n">0 of 4</td><td class="n">0 of 4</td><td class="n">0 of 4</td></tr>
+<tr><td>medical values kept</td><td class="n">100.0 % (4,855)</td><td class="n">100.0 %</td><td class="n">100.0 %</td></tr>
+<tr><td>linking precision / recall / F0.5 (wrong merges)</td><td class="n">1.00 / 0.91 / 0.98 (0)</td><td class="n">1.00 / 0.87 / 0.97 (0)</td><td class="n">1.00 / 0.87 / 0.97 (0)</td></tr>
+<tr><td>run time / peak memory</td><td class="n">4.5 s / 41 MB</td><td class="n">4.6 s</td><td class="n">4.6 s</td></tr>
+</table>
+<p><b>Re-identification risk (our attacker simulation; raw data = 98 %).</b> Weaker generalisation lets the attacker pin down far more patients; the utility cost of coarser bands is under half a point
+because the generalisation part is 10 % of the 20-point utility score, and privacy credit stays full while utility is above 0.40.</p>
+<table>
+<tr><th>Policy</th><th>Record-linkage risk</th><th>Patients re-identified</th></tr>
+<tr><td>5-year bands, tehsil kept, 3-digit PIN</td><td class="n">0.124</td><td class="n">70.8 %</td></tr>
+<tr><td>5-year bands, tehsil dropped, 3-digit PIN</td><td class="n">0.099</td><td class="n">54.2 %</td></tr>
+<tr><td><b>chosen:</b> 10-year bands, district only, no PIN, <code>75+</code></td><td class="n"><b>0.068</b></td><td class="n"><b>35.4 %</b></td></tr>
+<tr><td>20-year bands, district only, no PIN</td><td class="n">0.052</td><td class="n">22.9 %</td></tr>
+</table>
+<p>Also measured: non-PII token retention 98.5 %; every interval exact in all 21 multi-date documents; byte-identical output across runs with one secret and 0 of 59 pseudonyms shared across two secrets;
+10x the data (2,000 files) in 47 s and 149 MB. Of the 54 released patient profiles 40 are unique on (sex, age band, district); the attacker still needs a registry match, which is why the simulated rate is 35 % and not 74 %.</p>
+
+<h2>6. Known limitations</h2>
+<ul>
+<li>No OCR: scanned PDFs / images and XML are quarantined (safe, but their content is lost); legacy-font Hindi is not decoded.</li>
+<li>A name with no textual cue and absent from every structured field is found only by the rare-pair rule and can be missed.</li>
+<li>Rare diagnoses are kept because they are medical values, so a targeted attack using a known rare condition still partly succeeds (simulated 0.21 of the raw 1.00).</li>
+<li>dd/mm vs mm/dd is inferred per hospital from unambiguous dates; a hospital with none falls back to the global majority. JSON ages become band strings (a value-type change).</li>
+<li>Thresholds were tuned on one synthetic generator plus our own mutations; the hidden unseen-format dataset may still contain surprises. No LLM, no pretrained model and no external dataset is used.</li>
+</ul>
+</body></html>
