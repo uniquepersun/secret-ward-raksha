@@ -28,12 +28,12 @@ _EMAIL = rx.compile(r"[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+|(?<![\w])[\w.\-]{3,}@(?:ab
 _PAN = rx.compile(r"(?<![A-Za-z0-9])[A-Z]{5}\d{4}[A-Z](?![A-Za-z0-9])")
 _ALNUM_ID = rx.compile(r"(?<![\w/\-])(?=[A-Za-z0-9/\-]*\d)[A-Za-z]{2,6}(?:[\-/][A-Za-z0-9]{1,10}){1,4}(?![\w])|"
                        r"(?<![\w])[A-Za-z]{2,5}\d{4,}[A-Za-z0-9]*(?![\w])")
-_LABELLED_ID = rx.compile(r"(?i)(?:uhid|mrn|ipd(?:\s*no)?|opd(?:\s*no)?|reg(?:istration)?(?:\s*no)?|patient[\s_]*(?:id|ref)|"
+_LABELLED_ID = rx.compile(r"(?i)(?<![A-Za-z])(?:uhid|mrn|ipd(?:\s*no)?|opd(?:\s*no)?|reg(?:istration)?(?:\s*no)?|patient[\s_]*(?:id|ref)|"
                           r"hosp(?:ital)?[\s_]*id|policy(?:\s*no)?|claim(?:\s*no)?|pmjay|abha|aadhaar|aadhar|uid|pan|"
                           r"आधार|यूएचआईडी|पंजीकरण)[\s_]*(?:no\.?|number|id|संख्या|नंबर)?[\s:#.\-=]*([A-Za-z]{0,6}[\-/]?\d[\dA-Za-z/\-]{3,})")
 _DIGITS_AFTER_NAME = rx.compile(r"(?<=[A-Za-z\u0900-\u097F_])_(\d{4,})(?!\d)")
 _MEDCODE = rx.compile(r"^(?:[A-Z]\d{2}(?:\.\d+)?|\d{3,5}-\d|[A-Z]{1,3}\d{2,3}[A-Z]?)$")  # ICD / LOINC / package codes
-_URL = rx.compile(r"(?i)\b(?:https?://|www\.)\S+")
+_URL = rx.compile(r"(?i)\b(?:https?://|www\.)[^\s\"'<>)\]]+|(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])")  # URLs and UUIDs are never PII
 _DATEISH = rx.compile(r"^\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4}$")
 
 # ---------------------------------------------------------------- address pieces
@@ -226,7 +226,7 @@ def _is_doctor_context(text: str, pos: int) -> bool:
     return bool(_DOCTOR_BEFORE.search(text[max(0, pos - 14):pos]))
 
 
-def find_spans(text: str, lx: Lexicon, hint: str = "") -> list[Span]:
+def find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> list[Span]:
     """Detect PII in one string. `hint` is a field-role hint ('' for free text)."""
     if not text or not text.strip():
         return []
@@ -380,7 +380,8 @@ def find_spans(text: str, lx: Lexicon, hint: str = "") -> list[Span]:
                     add(toks[i][0], toks[i + n - 1][1], "VILLAGE", "VILLAGE", 4)
                     break
     # generic last resort: rare Title-Case 2-3 token sequence made of plausible name tokens
-    for m in rx.finditer(rf"(?<![\w\p{{M}}])({TITLE_TOK}(?:[ \t]{{1,2}}{TITLE_TOK}){{1,2}})(?![\w\p{{M}}])", text):
+    pair_rx = rx.compile(rf"(?<![\w\p{{M}}])({TITLE_TOK}(?:[ \t]{{1,2}}{TITLE_TOK}){{1,2}})(?![\w\p{{M}}])")
+    for m in (pair_rx.finditer(text) if loose else ()):
         seq = m.group(1)
         toks = [t.strip(".'’-") for t in _TOKEN.findall(seq)]
         if len(toks) < 2 or any(len(t) < 2 or lex.known_nonname(t) for t in toks):
@@ -390,7 +391,9 @@ def find_spans(text: str, lx: Lexicon, hint: str = "") -> list[Span]:
         if _is_doctor_context(text, m.start(1)):
             continue
         seed = sum(t.lower() in lex.SEED_GIVEN or t.lower() in lex.SEED_SURNAME for t in toks)
-        if seed >= 1 and lx.df.get(seq.casefold(), 0) <= 4:
+        df = lx.df.get(seq.casefold(), 0)
+        # unknown but rare Title-Case pair, clear of every vocabulary: very likely a person (canary-style names)
+        if (seed >= 1 and df <= 4) or (df <= 3 and all(len(t) >= 3 for t in toks)):
             add(m.start(1), m.end(1), "NAME", "other", 7)
 
     spans = [sp for sp in spans if not any(sp.start >= us and sp.end <= ue for us, ue in urls)]

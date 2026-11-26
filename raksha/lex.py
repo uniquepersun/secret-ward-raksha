@@ -95,7 +95,7 @@ UNITS = _w("mg ml mcg g dl l mmhg bpm min kg cm mm mmol iu meq mg/dl g/dl mmol/l
            "lakh lakhs days day weeks week wks wk months month mths yrs yr years year hrs hr hours hour times")
 
 # --- ordinary English / Hindi-Hinglish function words and clinic vocabulary ---------------------
-COMMON = _w("""serum plasma whole total count random fasting postprandial routine panel profile function lipid cardiac complete haemogram haematology urine stool sample samples specimen collected received reference range ranges sodium potassium 
+COMMON = _w("""vill village gram gaon grm tehsil tahsil taluk block distt district mohalla colony nagar ward makan house near opp opposite behind beside landmark janm tithi pin code reg date naam ling umar pata jila registration serum plasma whole total count random fasting postprandial routine panel profile function lipid cardiac complete haemogram haematology urine stool sample samples specimen collected received reference range ranges sodium potassium 
 the a an and or of to in on at by for with without from into onto over under after before during about against
 between through is are was were be been being am do does did has have had having will would shall should can
 could may might must not no nor so than too very just also only own same such as if then else when where which

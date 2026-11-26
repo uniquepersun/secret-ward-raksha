@@ -723,11 +723,11 @@ class Pipeline:
             return br(r or "ADDRESS")
         return br("REDACTED")
 
-    def scrub_text(self, text: str, ctx: Ctx, hint: str = "", plain: bool = False, dates: bool = True) -> str:
+    def scrub_text(self, text: str, ctx: Ctx, hint: str = "", plain: bool = False, dates: bool = True, loose: bool = True) -> str:
         if not text:
             return text
         text = clean(text)
-        spans = find_spans(text, self.lx, hint)
+        spans = find_spans(text, self.lx, hint, loose)
         out, pos = [], 0
         for s in spans:
             out.append(text[pos:s.start])
@@ -830,7 +830,7 @@ class Pipeline:
     def scrub_header(self, h: str, d: DocState) -> str:
         h = clean(h)
         ctx = self.ctx_from_string(h, d)
-        t = self.scrub_text(h, ctx, dates=False)
+        t = self.scrub_text(h, ctx, dates=False, loose=False)
         return t
 
     def render_text(self, d: DocState) -> str:
@@ -845,7 +845,7 @@ class Pipeline:
         if not isinstance(k, str):
             return k
         c = ctx if ctx.ident else self.ctx_from_string(k, d)
-        return self.scrub_text(k, c, dates=False)
+        return self.scrub_text(k, c, dates=False, loose=False)
 
     def walk_json(self, node, parts, d: DocState, ctx: Ctx):
         if isinstance(node, dict):
@@ -944,7 +944,7 @@ class Pipeline:
         for i, p in enumerate(parts):
             stem, dot, ext = p.rpartition(".") if i == len(parts) - 1 and "." in p else (p, "", "")
             ctx = self.ctx_from_string(p, d)
-            s = self.scrub_text(stem.replace("_", " "), ctx, plain=True, dates=False) if self._needs_scrub(stem) else stem
+            s = self.scrub_text(stem.replace("_", " "), ctx, plain=True, dates=False, loose=False) if self._needs_scrub(stem) else stem
             if s != stem:
                 s = re.sub(r"\s+", "_", s.strip())
                 s = _PSN_REPEAT.sub(r"\1", s)
@@ -959,7 +959,7 @@ class Pipeline:
         return out
 
     def _needs_scrub(self, s: str) -> bool:
-        return bool(find_spans(s.replace("_", " "), self.lx))
+        return bool(find_spans(s.replace("_", " "), self.lx, loose=False))
 
     def write_all(self):
         san = self.out / "sanitized"
