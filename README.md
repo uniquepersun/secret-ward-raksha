@@ -9,6 +9,8 @@ Offline, CPU only, no LLM, **no trained model at all**: deterministic rules, voc
 Dependencies: `regex`, `rapidfuzz`, `charset-normalizer` (all pinned in `requirements.txt`); everything else is the
 standard library. Peak memory ~40 MB and ~4.5 s on the practice set; ~47 s and 150 MB on 10x the data.
 
+**Documents:** [2-page Project Brief (PDF)](docs/brief.pdf) · [project page](docs/index.html) · [experiment log](SCORES.md) · [data sources](DATA_SOURCES.md) · [licence](LICENSE)
+
 ## Setup and run
 
 ```sh
@@ -163,7 +165,7 @@ re-validates FHIR after every change.
 
 `main.py` entry point · `raksha/` package · `config/policy.yaml` privacy rules · `tests/` unit tests · `tools/` dev-only:
 `scorecard.py`, `mutate.py`, `attacker_sim.py`, `linkdebug.py`, `check_intervals.py`, `token_loss.py` · `SCORES.md` experiment log ·
-`brief/` the 2-page brief.
+`brief/` the 2-page brief (HTML source and PDF; the PDF is also at `docs/brief.pdf`) · `docs/index.html` a one-page project overview · `data/` offline hash blocklist · `requirements.txt` hash-pinned dependencies · `raksha.toml` setup and run commands for the evaluator.
 
 ### Generalisation check (independent data)
 Names that occur only in free text, with no cue and no structured copy, were tested on a separate planted set (60 notes, 160 name

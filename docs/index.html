@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Raksha: Offline Privacy Firewall</title>
+<meta name="description" content="Raksha removes personal identifiers from English, Hindi and Hinglish hospital exports, offline and without any model.">
+<style>
+  :root{
+    --bg:#f6f8fb; --card:#ffffff; --ink:#15202b; --mute:#566573; --line:#dbe3ea;
+    --navy:#0b2e4f; --blue:#124a6f; --teal:#0e7c86; --mint:#e8f5f3; --ok:#17794a; --warn:#a35a00;
+    --code:#0f1b27; --codeink:#d7e3ee; --shadow:0 1px 2px rgba(11,46,79,.06),0 6px 20px rgba(11,46,79,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#0c141c; --card:#121d28; --ink:#e6edf3; --mute:#9db0c1; --line:#223344; --navy:#7cc4e0; --blue:#0f3a57; --mint:#10282b; --code:#08111a; --shadow:none; }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+  a{color:var(--teal);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+  header.hero{background:linear-gradient(120deg,#0b2e4f 0%,#124a6f 55%,#0e7c86 100%);color:#fff;padding:56px 0 44px}
+  .eyebrow{letter-spacing:.14em;text-transform:uppercase;font-size:13px;opacity:.85}
+  header h1{font-size:clamp(28px,5vw,46px);line-height:1.1;margin:10px 0 14px;font-weight:750}
+  header p.lead{max-width:760px;font-size:18px;opacity:.95;margin:0 0 22px}
+  .btns{display:flex;flex-wrap:wrap;gap:10px}
+  .btn{display:inline-block;padding:10px 16px;border-radius:8px;font-weight:600;border:1px solid rgba(255,255,255,.55);color:#fff}
+  .btn.primary{background:#fff;color:#0b2e4f;border-color:#fff}
+  .btn:hover{text-decoration:none;filter:brightness(1.06)}
+  nav.tabs{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  nav.tabs .wrap{display:flex;gap:18px;overflow-x:auto;padding:10px 20px;white-space:nowrap}
+  nav.tabs a{color:var(--mute);font-size:14px;font-weight:600}
+  section{padding:38px 0 6px}
+  h2{font-size:26px;margin:0 0 6px;color:var(--navy)}
+  .sub{color:var(--mute);margin:0 0 20px;max-width:760px}
+  .grid{display:grid;gap:16px}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 18px 16px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 6px;font-size:17px;color:var(--navy)}
+  .card p{margin:0;color:var(--mute);font-size:15px}
+  .stat .v{font-size:34px;font-weight:750;color:var(--teal);line-height:1.1}
+  .stat .l{color:var(--mute);font-size:14px;margin-top:4px}
+  .stat{background:var(--mint)}
+  .stats{grid-template-columns:repeat(3,1fr)} @media(max-width:760px){.stats{grid-template-columns:1fr 1fr}} @media(max-width:480px){.stats{grid-template-columns:1fr}}
+  .pipe{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;counter-reset:s}
+  .pipe .step{background:var(--card);border:1.5px solid var(--navy);border-radius:10px;padding:12px;position:relative;font-size:14px;color:var(--mute)}
+  .pipe .step b{display:block;color:var(--navy);font-size:15px;margin-bottom:4px}
+  .pipe .step.out{border-color:var(--ok)} .pipe .step.out b{color:var(--ok)}
+  .pipe .step::before{counter-increment:s;content:counter(s);position:absolute;top:-11px;left:10px;background:var(--teal);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+  @media(max-width:860px){.pipe{grid-template-columns:1fr 1fr}}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:15px}
+  th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{background:color-mix(in srgb,var(--card) 80%,var(--teal) 8%);color:var(--navy);font-size:14px}
+  td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  tr.pick td{background:var(--mint);font-weight:650}
+  .tablewrap{overflow-x:auto}
+  pre{background:var(--code);color:var(--codeink);border-radius:10px;padding:14px 16px;overflow-x:auto;font:13.5px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0}
+  code{font:0.92em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:color-mix(in srgb,var(--ink) 8%,transparent);padding:1px 5px;border-radius:4px}
+  pre code{background:none;padding:0}
+  ul.clean{margin:0;padding-left:18px;color:var(--mute)} ul.clean li{margin:5px 0}
+  .tag{display:inline-block;background:var(--mint);color:var(--teal);border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;margin-right:6px}
+  .warn li::marker{color:var(--warn)}
+  footer{margin:46px 0 30px;color:var(--mute);font-size:14px;border-top:1px solid var(--line);padding-top:16px}
+  @media print{nav.tabs{display:none} header.hero{padding:24px 0} section{padding-top:18px} .card,table{box-shadow:none}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Yugaantar DevForge &middot; Track 3 &middot; Secret Wards</div>
+    <h1>Raksha: an offline firewall that learns the ward&rsquo;s own vocabulary</h1>
+    <p class="lead">Strips every personal identifier from messy English, Hindi and Hinglish hospital exports, keeps medical values byte-identical, gives each patient one keyed pseudonym across files, scripts and hospitals, and generalises what a hacker could join against a voter list. Rules and vocabularies only: no LLM, no trained model, CPU only, no network.</p>
+    <div class="btns">
+      <a class="btn primary" href="brief.pdf">Project Brief (PDF)</a>
+      <a class="btn" href="../README.md">README</a>
+      <a class="btn" href="../SCORES.md">Experiment log</a>
+      <a class="btn" href="https://github.com/uniquepersun/secret-ward-raksha">GitHub</a>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs"><div class="wrap">
+  <a href="#idea">The idea</a><a href="#pipeline">Pipeline</a><a href="#results">Results</a><a href="#tradeoff">Privacy vs utility</a>
+  <a href="#security">Security</a><a href="#run">Run it</a><a href="#limits">Limitations</a>
+</div></nav>
+
+<main class="wrap">
+
+<section id="idea">
+  <h2>The idea</h2>
+  <p class="sub">Formats change; the ward&rsquo;s own names, villages and ids do not. Raksha types every column from what its values look like (not from header text), learns the names and places of that run from the structured fields, then finds them in free text in any script.</p>
+  <div class="grid g3">
+    <div class="card"><h3>Content-first typing</h3><p>Renamed, Hindi or Marathi headers (<code>Pt. Full Name</code>, <code>&#2344;&#2366;&#2357;</code>) still resolve, because the values decide the role.</p></div>
+    <div class="card"><h3>Cross-script identity</h3><p>Mohammad = Mohd. = Md. = &#2350;&#2379;&#2361;&#2350;&#2381;&#2350;&#2342; share one phonetic key, so a name from a Latin registration is removed from a Hindi note.</p></div>
+    <div class="card"><h3>Wrong merges are the enemy</h3><p>Vetoes for siblings, mother and baby, homonyms and family mailboxes keep different people apart.</p></div>
+  </div>
+</section>
+
+<section id="pipeline">
+  <h2>Pipeline</h2>
+  <p class="sub">Input folder in; <code>sanitized/</code>, <code>report.json</code> and <code>records.jsonl</code> out. Everything stays in memory.</p>
+  <div class="pipe">
+    <div class="step"><b>Ingest</b>any encoding or format; sniff; quarantine what cannot be cleaned</div>
+    <div class="step"><b>Learn</b>names, villages, ids from structured fields; per-hospital date order</div>
+    <div class="step"><b>Evidence</b>per record: ids, name keys, age, sex, DOB, village</div>
+    <div class="step"><b>Link</b>union-find with vetoes; HMAC-SHA256 pseudonym per cluster</div>
+    <div class="step"><b>Scrub</b>PII spans, per-patient date shift, age bands, place removal</div>
+    <div class="step out"><b>Export</b>sanitized files, report and per-record links</div>
+  </div>
+  <div class="grid g2" style="margin-top:18px">
+    <div class="card"><h3>Detection in three scripts</h3><p>Phones in every written form (Devanagari and spelled-out digits too), Aadhaar, ABHA, PAN, e-mail, UHID / MRN / policy ids; name cues, honorifics and kin words; a negative gazetteer keeps <code>Dr. Ramesh</code>, <code>ASHA worker</code>, <code>Dolo 650 BD</code> and <code>150/90</code>. Hidden places (file names, headers, JSON keys, metadata, base64) take the same path.</p></div>
+    <div class="card"><h3>Linkage and pseudonyms</h3><p>Records merge on a strong id, a phone plus a compatible name, or a full name plus a corroborating fact, unless a veto fires (two Aadhaar numbers, two sexes, ages more than 4 years apart, two DOBs, incompatible names, Manish vs Manisha, &ldquo;baby of X&rdquo;). Pseudonym = <code>PSN-</code> + base32(HMAC-SHA256(secret, cluster key)).</p></div>
+  </div>
+</section>
+
+<section id="results">
+  <h2>Measured results</h2>
+  <p class="sub">Practice set, kit self-check. The mutated column is our own proxy for unseen formats, not independent data.</p>
+  <div class="grid g3 stats">
+    <div class="card stat"><div class="v">0.0 %</div><div class="l">personal data still visible (0 of 3,230; Latin, Hindi and Hinglish all 0)</div></div>
+    <div class="card stat"><div class="v">0 / 4</div><div class="l">canaries found</div></div>
+    <div class="card stat"><div class="v">99.2 %</div><div class="l">medical values kept (4,816 of 4,855)</div></div>
+    <div class="card stat"><div class="v">1.00 / 0.98</div><div class="l">linking precision / recall, F0.5 1.00, 0 wrong merges</div></div>
+    <div class="card stat"><div class="v">4 s</div><div class="l">run time, 42 MB peak memory</div></div>
+    <div class="card stat"><div class="v">0 false merges</div><div class="l">on a 320-patient family stress set (precision 1.000)</div></div>
+  </div>
+  <div class="tablewrap" style="margin-top:18px"><table>
+    <tr><th>Measure</th><th>Practice</th><th>Mutated proxy</th><th>Independent checks</th></tr>
+    <tr><td>personal data visible</td><td class="n">0.0 %</td><td class="n">0.0 &ndash; 0.1 %</td><td>0 of ~255 planted items on 3 outside datasets; 1 of 160 cue-less free-text names</td></tr>
+    <tr><td>medical values kept</td><td class="n">99.2 %</td><td class="n">99.2 %</td><td>100 % on outside datasets</td></tr>
+    <tr><td>linking F0.5 (wrong merges)</td><td class="n">1.00 (0)</td><td class="n">0.96 &ndash; 0.98 (0)</td><td>family set: precision 1.000, 0 false merges</td></tr>
+    <tr><td>scale</td><td class="n">4 s</td><td class="n">4 s</td><td>40,000 id-keyed JSON records in 11 s</td></tr>
+  </table></div>
+</section>
+
+<section id="tradeoff">
+  <h2>Privacy vs utility</h2>
+  <p class="sub">A hacker holding a voter list can join &ldquo;who was treated for what, and when&rdquo;. Raw data lets our simulated attacker re-identify 98 %. The policy was chosen from the attacker simulation, not guessed; coarser bands cost under half a point of utility.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Policy</th><th>Record-linkage risk</th><th>Patients re-identified</th></tr>
+    <tr><td>5-year bands, tehsil kept, 3-digit PIN</td><td class="n">0.124</td><td class="n">70.8 %</td></tr>
+    <tr><td>5-year bands, tehsil dropped, 3-digit PIN</td><td class="n">0.099</td><td class="n">54.2 %</td></tr>
+    <tr class="pick"><td>chosen: 10-year bands, district only, no PIN, 75+ top-code</td><td class="n">0.068</td><td class="n">35.4 %</td></tr>
+    <tr><td>20-year bands, district only, no PIN</td><td class="n">0.052</td><td class="n">22.9 %</td></tr>
+  </table></div>
+  <p class="sub" style="margin-top:12px">Also applied: one secret date shift per patient (90&ndash;365 days) so stay lengths stay exact, and conditions held by a single patient become <code>[RARE CONDITION]</code>, which cuts the simulated targeted attack from 1.00 to 0.07.</p>
+</section>
+
+<section id="security">
+  <h2>Security design</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Nothing at rest</h3><ul class="clean"><li>Intermediates live in memory: no temp files, no logs to encrypt or clean.</li><li>The secret comes only from <code>RAKSHA_SECRET</code> and is never written anywhere.</li><li>stdout carries counts only; exceptions print the type only.</li></ul></div>
+    <div class="card"><h3>Hostile input, handled statically</h3><ul class="clean"><li>Hash blocklist, EICAR, magic bytes, script and macro markers; nothing is executed, imported or unpacked.</li><li>Quarantined files get a reason code and are never copied; the input is never modified.</li><li>Regex timeouts, a run time budget, resource limits and hash-pinned dependencies.</li></ul></div>
+  </div>
+</section>
+
+<section id="run">
+  <h2>Run it</h2>
+  <p class="sub">Python 3.10+, three small hash-pinned packages. No internet needed at run time.</p>
+<pre><code>python3 -m venv .venv &amp;&amp; .venv/bin/pip install -r requirements.txt
+
+export RAKSHA_SECRET='choose-a-long-random-secret'
+.venv/bin/python main.py --input dev/input --output out
+
+python3 validate_output.py --input dev/input --output out    # CONTRACT OK
+python3 check_dev.py --output out                            # leaks, canaries, medical, linking
+python3 check_submission.py --repo . --run                   # READY TO SUBMIT</code></pre>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><h3>Repository map</h3><p><code>main.py</code> entry point &middot; <code>raksha/</code> pipeline &middot; <code>config/</code> policy &middot; <code>data/</code> blocklist &middot; <code>tests/</code> &middot; <code>tools/</code> scorecard and attack simulator</p></div>
+    <div class="card"><h3>Reproducible</h3><p>The same secret gives byte-identical output; a different secret shares no pseudonym.</p></div>
+    <div class="card"><h3>Documents</h3><p><a href="brief.pdf">Project Brief</a> &middot; <a href="../README.md">README</a> &middot; <a href="../SCORES.md">SCORES</a> &middot; <a href="../DATA_SOURCES.md">DATA_SOURCES</a></p></div>
+  </div>
+</section>
+
+<section id="limits">
+  <h2>Known limitations</h2>
+  <div class="card"><ul class="clean warn">
+    <li>No OCR: scanned PDFs, images and XML are quarantined (safe, but their content is lost). Scripts beyond English, Devanagari and Hinglish are not detected.</li>
+    <li>A name with no cue and no structured copy can be missed; a lone first name that is also a Hindi word is the known case.</li>
+    <li>Linking is deliberately conservative: name-only and phone-only mentions often stay unlinked, because a wrong merge costs more than a missed link.</li>
+    <li>Only conditions held by one patient are generalised; JSON integer ages become band strings; dd/mm versus mm/dd is inferred per hospital.</li>
+    <li>Thresholds were tuned on one synthetic generator and our own mutations; independent review datasets found no overfit, but the hidden unseen-format set may hold surprises.</li>
+  </ul></div>
+</section>
+
+<footer>Raksha &middot; Track 3 &middot; team-secret-ward &middot; MIT licence &middot; no LLM, no pretrained model, no external dataset.</footer>
+</main>
+</body>
+</html>
