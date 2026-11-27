@@ -354,9 +354,10 @@ def find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> li
     armed = hasattr(signal, "setitimer") and threading.current_thread() is threading.main_thread() and SPAN_TIMEOUT > 0
     prev = signal.signal(signal.SIGALRM, _on_alarm) if armed else None
 
+    if armed:                                      # one wall-clock cap per call (scaled by size, at most 120 s): a crafted input cannot stall the run
+        signal.setitimer(signal.ITIMER_REAL, min(120.0, SPAN_TIMEOUT * max(1, len(masked) // CHUNK + 1)))
+
     def scan(chunk):
-        if armed:                                  # hard wall-clock cap per chunk: a crafted input cannot stall the run
-            signal.setitimer(signal.ITIMER_REAL, SPAN_TIMEOUT)
         return _find_spans(chunk, lx, hint, loose)
 
     try:

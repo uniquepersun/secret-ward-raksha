@@ -81,6 +81,14 @@ def main() -> int:
     p = Pipeline(inp, out, secret, policy)
     try:
         p.load_all()
+        # provisional outputs: if the run is killed mid-way (time or memory) a valid, honest report still exists
+        pf = [{"input_sha256": d.sha, "output": None, "status": "quarantined", "reason": d.reason if d.status != "sanitized" else "interrupted_run"}
+              for d in p.docs]
+        (out / "records.jsonl").write_text("", encoding="utf-8")
+        (out / "report.json").write_text(json.dumps({"schema": "raksha-report/1", "files": pf, "counts": {
+            "files_total": len(pf), "files_sanitized": 0, "files_quarantined": len(pf), "records_processed": 0,
+            "identifiers_detected": 0, "records_linked": 0, "records_generalized": 0, "records_suppressed": 0,
+            "records_quarantined": 0}, "entities": {}, "timing": {"seconds": 0}, "resources": {}}, indent=2) + "\n", encoding="utf-8")
         p.learn()
         p.build_evidence()
         p.link()

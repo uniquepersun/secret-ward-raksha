@@ -222,15 +222,22 @@ class Pipeline:
     # =========================================================================== load
     def load_all(self):
         found = []
+        out_res = self.out.resolve()
         for dp, dns, fns in os.walk(self.inp, followlinks=False):
-            dns.sort()
+            dns[:] = sorted(x for x in dns if (Path(dp) / x).resolve() != out_res)    # a previous run's output is never input
             for fn in sorted(fns):
                 found.append(Path(dp) / fn)
         for path in sorted(found):
             rel = path.relative_to(self.inp).as_posix()
             if path.is_symlink() or not path.is_file():
                 # never follow a link out of the input folder, never open a device / pipe / socket
-                self.docs.append(DocState(rel, hashlib.sha256(b"").hexdigest(), path.suffix.lower(), status="quarantined",
+                sha = hashlib.sha256(b"").hexdigest()
+                try:                                     # the evaluator hashes what the link points at: hash it too (bytes are never parsed or emitted)
+                    if path.is_symlink() and path.is_file() and path.stat().st_size <= 100 * 1024 * 1024:
+                        sha = self._sha_stream(path)
+                except OSError:
+                    pass
+                self.docs.append(DocState(rel, sha, path.suffix.lower(), status="quarantined",
                                           reason="symlink" if path.is_symlink() else "special_file"))
                 continue
             try:
@@ -552,7 +559,7 @@ class Pipeline:
                 self.lx.add_id(k)
 
     def _learn_text(self, text: str):
-        if not text or len(text) < 3 or self.over_budget():
+        if not text or len(text) < 3 or time.monotonic() - self.t0 > 0.4 * self.budget:   # learning may use at most 40% of the budget
             return
         try:
             self._learn_text_inner(text)
@@ -937,10 +944,15 @@ class Pipeline:
             if r is None:
                 c = id_core(n)
                 if c:
-                    for k, rr in self.id_cluster.items():
-                        if id_core(k) == c:
-                            r = rr
-                            break
+                    cm = getattr(self, "_core_map", None)
+                    if cm is None or self._core_map_n != len(self.id_cluster):   # built once: this used to scan every id per key
+                        cm = {}
+                        for k, rr in self.id_cluster.items():
+                            cc = id_core(k)
+                            if cc:
+                                cm.setdefault(cc, rr)
+                        self._core_map, self._core_map_n = cm, len(self.id_cluster)
+                    r = cm.get(c)
             if r is not None and self.cl_info[r]["ident"]:
                 info = self.cl_info[r]
                 return Ctx(info["psn"], None, d.order or self.global_order, info["skels"], info["ids"], info["cores"], True, info["names"])
@@ -1226,14 +1238,15 @@ class Pipeline:
                         out[self.scrub_key(k, d, ctx)] = v if k in kv else self.walk_json(v, parts + (k,), d, ctx)
                     return out
             rt = node.get("resourceType")
-            out, seen = {}, set()
+            out, seen, nxt = {}, set(), {}
             for k, v in node.items():
                 p = parts + ((f"<{rt}>", k) if rt and k != "resourceType" else (k,))
                 nk = self.scrub_key(k, d, ctx)
                 if nk in seen:
-                    i = 2
+                    i = nxt.get(nk, 2)                   # next free suffix per base key: linear, not quadratic, for 100k id-keyed records
                     while f"{nk}_{i}" in seen:
                         i += 1
+                    nxt[nk] = i + 1
                     nk = f"{nk}_{i}"
                 seen.add(nk)
                 out[nk] = self.walk_json(v, p, d, ctx)
@@ -1314,13 +1327,14 @@ class Pipeline:
             if u is not None:
                 return self.walk_json(node, u.base, d, self.ctx_for(d, u))
             if isinstance(node, dict):
-                out, seen = {}, set()
+                out, seen, nxt = {}, set(), {}
                 for k, v in node.items():
                     nk = self.scrub_key(k, d, ctx)
                     if nk in seen:
-                        i = 2
+                        i = nxt.get(nk, 2)
                         while f"{nk}_{i}" in seen:
                             i += 1
+                        nxt[nk] = i + 1
                         nk = f"{nk}_{i}"
                     seen.add(nk)
                     out[nk] = rec(v, parts + (k,), ctx)
