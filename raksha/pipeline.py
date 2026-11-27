@@ -23,7 +23,7 @@ from . import lex, privacy, security
 from .columns import HDR_DOCTOR, infer_role, is_namey
 from . import detect as _detect
 from .detect import Lexicon, Span, SpanTimeout, doctor_names, find_spans
-from .link import Ev, Linker, name_set, partial
+from .link import _tok_match, Ev, Linker, name_set, partial
 from .privacy import band, band_age_value, band_ages_in_text, infer_order, parse_date_value, shift_text_dates
 from .translit import ascii_digits, clean, has_deva, skeleton
 
@@ -172,6 +172,9 @@ def _looks_like_data_row(cells) -> bool:
 
 
 _FHIR_CODE_KEYS = frozenset("use system code gender status type language rank mode intent kind".split())
+
+
+_RELATIVE_PARTS = frozenset("contact contacts relatedperson related_person guardian guardians nextofkin next_of_kin kin relative relatives emergency_contact dependents dependent".split())
 
 
 def sig_join(parts) -> str:
@@ -1061,6 +1064,12 @@ class Pipeline:
             if _DR.match(sv):
                 return sv
             self.entities["PATIENT_NAME"] += 1
+            if ctx.psn and ctx.names:                  # another person's name in a name field (FHIR contact, guardian) is not the patient
+                sk = {skeleton(t) for t in re.split(r"[\s.]+", sv) if skeleton(t)}
+                core = frozenset({x for x in sk if x not in self.lx.generic_skels} or sk)
+                own = set().union(*ctx.names)
+                if core and not all(any(_tok_match(c, u) for u in own) for c in core):     # every word must be one of the patient's own
+                    return "[NAME]"
             return ctx.psn or "[NAME]"
         if role == "RELNAME":
             self.entities["RELATIVE_NAME"] += 1
@@ -1260,6 +1269,8 @@ class Pipeline:
             return self.scrub_text(s, ctx)
         if role == "NAME" and HDR_DOCTOR.search(key):
             return s
+        if role == "NAME" and any(str(x).lower() in _RELATIVE_PARTS for x in parts):
+            role = "RELNAME"                             # FHIR contact / RelatedPerson / guardian: someone else, not the patient
         return self.scrub_cell(role, s, ctx)
 
     def _try_b64(self, s: str, d: DocState, ctx: Ctx):

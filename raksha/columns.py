@@ -16,7 +16,7 @@ from .translit import ascii_digits, has_deva, skeleton
 _H = lambda p: re.compile(p, re.I | re.U)  # noqa: E731
 
 HDR_RELNAME = _H(r"pitaji|patni|\bbiwi\b|\bmaa\b|\bbete?\b|\bbeti\b|sampark|sambandhi|saathi|related.?person|caller|raised.?by|witness|visitor|informant|reporter|requester|called.?by|signed.?by|bystander|emergency.?contact|relative|guardian|father|mother|spouse|husband|wife|\bpita\b|\bpati\b|attendant|next.?of.?kin|\bnok\b|"
-                 r"care.?of|\bc/?o\b|कर्ता|अभिभावक|पिता|पति|संबंधी|रिश्ते")
+                 r"care.?of|\bc/?o\b|कर्ता|अभिभावक|पिता|पति|संबंधी|रिश्ते|नातेवाईक|वडील")
 HDR_NAME = _H(r"(?:^|[\s_\-.:/])(name|naam|nm|patient|pt|full|first|last|given|family|surname|local|middle|caller|"
               r"contact.?person|informant|नाम|नाव|नांव|नावं|मरीज|रोगी|पेशंट|पेशेंट|रुग्ण)(?:$|[\s_\-.:/'’s])")
 HDR_NONPERSON = _H(r"hospital|facility|lab|test|drug|medic|ward|dept|department|diagnos|display|title|system|file|"
@@ -158,6 +158,8 @@ def infer_role(header: str, values: list, known_names=None) -> str:
     if HDR_VILLAGE.search(h) and not hdr_name and nameshape >= 0.4:
         return "VILLAGE"
     hdr_rel = bool(HDR_RELNAME.search(h))
+    if hdr_rel:                                   # "W/o Deepak Rawat" mixed with plain names: judge the name part
+        nameshape = max(nameshape, _share([re.sub(r"(?i)^\s*[sdwch]\s*/\s*o\.?\s*", "", v) for v in sv], is_namey))
     if nameshape >= 0.6 and (hdr_name or hdr_rel or namehits >= 0.4 or seedhits >= 0.3):
         return "RELNAME" if hdr_rel else "NAME"
     if hdr_name and nameshape >= 0.3:

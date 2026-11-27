@@ -75,6 +75,7 @@ _RUN = _tc(r"(?<![\d])\+?\(?\d(?:\)?[ \-.]{0,2}\d){5,}(?![\d])")
 _MASKED = _tc(r"(?<![\w])(?:[Xx*•#]{2,4}[\s\-]?){2}\d{4}(?!\d)|(?<![\w])[Xx*•]{4}[\s-]?[Xx*•]{4}[\s-]?[Xx*•\d]{4}")
 _EMAIL_OBF = _tc(r"(?i)\b[\w.+\-]{1,}\s*(?:\[at\]|\(at\)|\{at\}|\sat\s)\s*[\w\-]{2,}\s*(?:\[dot\]|\(dot\)|\{dot\}|\sdot\s)\s*[a-z]{2,}\b")
 _EMAIL = _tc(r"(?<![\w.+\-])[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+|(?<![\w])[\w.\-]{3,}@(?:abdm|sbx|ndhm|abha)\b", rx.I)
+_MASKED_PHONE = _tc(r"(?<![\w])(?:\+?91[\s-]?)?[6-9]\d[Xx*\u2022]{4,7}\d{2,4}(?![\w])")
 _IPV4 = _tc(r"(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?![\d]|\.\d)")
 _HANDLE = _tc(r"(?<![\w@.])@[A-Za-z][\w.]{2,29}(?![\w@])")
 _GEO = _tc(r"(?<![\d.])-?\d{1,3}\.\d{4,}\s*[,/;]\s*-?\d{1,3}\.\d{4,}(?![\d])")
@@ -99,10 +100,10 @@ _URL = _tc(r"(?i)\b(?:https?://|www\.)[^\s\"'<>)\]]+|(?<![0-9a-f])[0-9a-f]{8}-[0
 _DATEISH = _tc(r"^\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4}$")
 
 # ---------------------------------------------------------------- address pieces
-_HOUSE = _tc(rf"(?i)(?<![\w])(?:h\.?\s*no\.?|house(?:\s*no\.?)?|makan(?:\s*no\.?)?|flat(?:\s*no\.?)?|plot(?:\s*no\.?)?|"
-                    rf"quarter(?:\s*no\.?)?|room\s*no\.?|मकान(?:\s*नं?\.?|\s*नंबर)?|मकान\s*सं\.?|घर\s*नं?\.?)\s*(?:[:\-]\s*)?"
+_HOUSE = _tc(rf"(?i)(?<![\w])(?:h\.?\s*no\.?|house(?:\s*(?:no\.?|number))?|ghar\s*(?:no\.?|number|sankhya)?|makan(?:\s*no\.?)?|flat(?:\s*no\.?)?|plot(?:\s*no\.?)?|"
+                    rf"quarter(?:\s*no\.?)?|room\s*no\.?|मकान(?:\s*नंबर|\s*नं?\.?)?|मकान\s*सं\.?|घर\s*नं?\.?|घर\s*क्र\.?|मकान\s*क्र\.?|घर\s*नंबर)\s*(?:[:\-]\s*)?"
                     rf"\d+[A-Za-z]?(?:[/\-]\d+[A-Za-z]?)*")
-_LOCALITY = _tc(rf"(?i)(?<![\w])(?:ward(?<=,\s*ward)\s*(?:no\.?\s*)?\d+(?!\s*[(/]|\s+bed\b|\s*[,\-]\s*bed\b|\s*(?:icu|ward)\b)|mohalla\s+{SEQ_TITLE}|mohalle\s+{SEQ_TITLE}|"
+_LOCALITY = _tc(rf"(?i)(?<![\w])(?:(?<!\bbed\s*\d{1,3}\s*,\s*)ward(?<=,\s*ward)\s*(?:no\.?\s*)?\d+(?!\s*[(/]|\s+bed\b|\s*[,\-]\s*bed\b|\s*(?:icu|ward)\b)|mohalla\s+{SEQ_TITLE}|mohalle\s+{SEQ_TITLE}|"
                        rf"colony\s+{SEQ_TITLE}|nagar\s+{SEQ_TITLE}|मोहल्ला\s+{TOK}(?:\s+{TOK}){{0,2}}|"
                        rf"वार्ड\s*(?:नं\.?\s*)?\d+|कॉलोनी\s+{TOK}(?:\s+{TOK}){{0,2}})")
 _LANDMARK = _tc(rf"(?i)(?<![\w])(?:near|opp(?:osite)?\.?|behind|beside|adjacent\s+to|next\s+to|nr\.?)\s+"
@@ -215,6 +216,7 @@ class Lexicon:
         self.name_skels: dict[str, str] = {}      # skeleton -> role
         self.generic_skels = {lex_skel for lex_skel in (skeleton(w) for w in lex.GENERIC_NAME_PARTS) if lex_skel}
         self.doctor_tokens: set[str] = set()
+        self.short_skels: dict[str, str] = {}
         self.skel_tokens: dict[str, set] = {}      # skeleton -> learned latin tokens (fast fuzzy check)
         self.village_phr: set[tuple[str, ...]] = set()   # tuples of skeleton tokens
         self.village_skels: set[str] = set()
@@ -240,6 +242,8 @@ class Lexicon:
             self.skel_tokens.setdefault(sk, set()).add(tl)
             if len(sk) >= 2 and sk not in self.generic_skels and t.casefold() not in lex.GENERIC_NAME_PARTS:
                 self.name_skels.setdefault(sk, role)
+            elif sk and t.casefold() not in lex.GENERIC_NAME_PARTS:
+                self.short_skels.setdefault(sk, role)      # Raju / Asha / Meera: too short or too common to match alone
 
     def add_village(self, value: str):
         toks = tuple(skeleton(t) for t in _TOKEN.findall(value or "") if skeleton(t))
@@ -394,6 +398,8 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
         add(m.start(), m.end(), "ID", "AADHAAR_MASKED", 1)
     for m in _PAN.finditer(v):
         add(m.start(), m.end(), "ID", "PAN", 1)
+    for m in _MASKED_PHONE.finditer(v):
+        add(m.start(), m.end(), "ID", "NUMBER", 1)
     for m in _IPV4.finditer(v):
         add(m.start(), m.end(), "ID", "NUMBER", 2)
     for m in _HANDLE.finditer(v):
@@ -558,6 +564,11 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
             sk = skeleton(t)
             if len(sk) >= 2 and (sk in lx.name_skels):
                 hit = lx.name_skels[sk]
+            elif sk in lx.short_skels and ti + 1 < len(toks_all) and text[m.start() + len(t):toks_all[ti + 1].start()].strip() == "":
+                nt = toks_all[ti + 1].group(0)        # a short given name counts only next to a surname: "राजू प्रसाद"
+                if (nt in _DEV_SURNAMES or skeleton(nt) in lx.name_skels or skeleton(nt) in lx.generic_skels) and nt not in DEV_COMMON:
+                    hit = lx.short_skels[sk]
+                    add(toks_all[ti + 1].start(), toks_all[ti + 1].end(), "NAME", hit, 6)
         else:
             nxt = toks_all[ti + 1].group(0).casefold() if ti + 1 < len(toks_all) else ""
             lower_ok = (not t[:1].isupper()) and tl in lx.name_tokens and len(t) >= 3 and (
