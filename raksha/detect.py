@@ -110,7 +110,7 @@ _LANDMARK = _tc(rf"(?i)(?<![\w])(?:near|opp(?:osite)?\.?|behind|beside|adjacent\
                        rf"(?:{TITLE_TOK}(?:\s+{TITLE_TOK}){{0,3}})|"
                        rf"(?<![\w\p{{M}}])(?:{L}+(?:\s+{L}+){{0,3}})\s+(?:के\s+)?(?:पास|पीछे|सामने|बगल)")
 _TEHSIL_CUE = _tc(rf"(?i)(?<![\w])(?:tehsil|tahsil|taluk|block|तहसील)\s*(?:[:\-.]\s*)?({SEQ_STRONG})")
-_VILLAGE_CUE = _tc(rf"(?i)(?<![\w])(?:village|vill\.?|gram|gaon|gaanv|grm|ग्राम|गाँव|गांव|मौजा)\s*(?:[:\-.]\s*)?({SEQ_STRONG})")
+_VILLAGE_CUE = _tc(rf"(?i)(?<![\w])(?:village|vill\.?|gram|gaon|gaanv|grm|ग्राम|गाँव|गांव|गाव|मौजा)\s*(?:[:\-.]\s*)?({SEQ_STRONG})")
 _PIN = _tc(r"(?i)(?:pin\s*(?:code)?|postal\s*code|पिन(?:\s*कोड)?)\s*(?:[:\-]\s*)?([1-9]\d{5})(?!\d)|"
                   r"(?:(?<=[A-Za-z\u0900-\u097F\)])\s*[\-,]\s*)([1-9]\d{5})(?!\d)")
 _RELWORD_BEFORE = _tc(r"(?i)(?:father|mother|husband|wife|spouse|guardian|relative|attendant|son|daughter|brother|sister|kin|caregiver|care-giver|pita|patni|pati|bhai|behen|माता|पिता|पति|पत्नी)(?:'?s)?[\s_\-]*(?:of)?[\s_\-]*$")
@@ -134,7 +134,7 @@ _BARE_PIN = _tc(r"(?<![\d.])[1-9]\d{5}(?![\d.]|\s*(?:mg|ml|g|kg|iu|%))")
 
 # ---------------------------------------------------------------- name cues
 _STRONG_LABEL = _tc(rf"(?i)(?<![\w])(?:patient(?:['’]s)?[\s_]*name|pt\.?[\s_]*name|name[\s_]*of[\s_]*(?:the[\s_]*)?patient|"
-                           rf"full[\s_]*name|first[\s_]*name|last[\s_]*name|name|naam|नाम|मरीज\s*का\s*नाम|रोगी\s*का\s*नाम|"
+                           rf"full[\s_]*name|first[\s_]*name|last[\s_]*name|name|naam|नाम|मरीज\s*का\s*नाम|रोगी\s*का\s*नाम|रुग्णाचे\s*(?:नाव|नांव)|पेशंटचे\s*नाव|नाव|नांव|रुग्णाचे\s*(?:नाव|नांव)|पेशंटचे\s*नाव|नाव|नांव|"
                            rf"पूरा\s*नाम|nom)\s*[:\-=]\s*({SEQ_STRONG})")
 _WEAK_LABEL = _tc(rf"(?i)(?<![\w])(?:patient|pt\.?|note\s*for|report\s*(?:for|of)|record\s*(?:for|of)|letter\s*(?:for|of)|"
                          rf"referral\s*for|certificate\s*(?:for|of)|consent\s*(?:of|for)|admitted\s*:|"
@@ -146,7 +146,7 @@ _OTHER_LABEL = _tc(rf"(?i)(?<![\w])(?:caller|informant|contact(?:\s*person)?|wit
                           rf"[\s:.\-]+({SEQ_TITLE})")
 _RELATION = _tc(rf"(?i)(?<![\w])(?:s\s*/\s*o|d\s*/\s*o|w\s*/\s*o|h\s*/\s*o|c\s*/\s*o|son\s+of|daughter\s+of|wife\s+of|"
                        rf"husband\s+of|father|mother|guardian|spouse|relative|attendant|पुत्र|पुत्री|पत्नी|पति|सुपुत्र|"
-                       rf"सुपुत्री|पिता|माता|द्वारा)\b?\.?[\s:\-]*(?:(?:name|naam|नाम)\s*(?:[:\-]\s*)?)?(?:श्री(?:मती)?\s+|mr\.?\s+|mrs\.?\s+|smt\.?\s+|shri\s+)?"
+                       rf"सुपुत्री|वडिलांचे\s*नाव|पतीचे\s*नाव|पत्नीचे\s*नाव|आईचे\s*नाव|नातेवाईकाचे\s*नाव|पिता|माता|द्वारा)\b?\.?[\s:\-]*(?:(?:name|naam|नाम)\s*(?:[:\-]\s*)?)?(?:श्री(?:मती)?\s+|mr\.?\s+|mrs\.?\s+|smt\.?\s+|shri\s+)?"
                        rf"({SEQ_TITLE})")
 _STOPW = r"(?!(?:hai|hain|he|ho|aur|and|ke|ki|ka|ko|se|is|are|was|has|with|saath|bhi|ne)(?![\p{L}\p{M}]))"
 _REL_LOW = _tc(rf"(?i)(?<![\w])(?:pita|pati|patni|bhai|behen|beti|mata|maa|attendant|father|mother|husband|wife|guardian|relative)"
@@ -276,6 +276,7 @@ DEV_COMMON = frozenset("""
 रोगी भर्ती छुट्टी जांच जाँच रिपोर्ट सलाह परामर्श भोजन नमक कम खुराक सुबह शाम रात बाद पहले अगले पिछले हफ्ते बजे में पर को का की के ने
 ओपीडी पर्चा नर्सिंग वार्ड बिस्तर दिनों दिनो घंटे तक मिलाकर साथ बाद ऊपर नीचे अंदर बाहर सामान्य उच्च निम्न रक्तचाप नाड़ी तापमान
 """.split())
+DEV_COMMON = DEV_COMMON | frozenset({"कोड", "पिन"})
 
 _NOT_NAME_FIRST = frozenset("""
 the a an of for with and or in on at by to from as is are was were not no yes if when where what who how this that these those
@@ -473,6 +474,9 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
                 add(a, a + len(seg.strip()), "ADDR", "ADDRESS", 4)
             off += len(seg) + 1
 
+    for m in _ADDR_LABEL.finditer(text):         # a 6-digit PIN inside an address value ("कोल्हापूर 416002")
+        for pm in re.finditer(r"(?<!\d)[1-9]\d{5}(?!\d)", ascii_digits(m.group(1))):
+            add(m.start(1) + pm.start(), m.start(1) + pm.end(), "PIN", "PIN", 3)
     for m in _ADDR_LABEL.finditer(text):         # address segments other than district / tehsil / placeholders leak house, lane, locality
         addr_segments(m.group(1), m.start(1))
     if hint == "address":                        # a cell already typed as an address (FHIR address.line, "Ghar ka Pata")

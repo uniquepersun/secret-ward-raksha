@@ -230,7 +230,7 @@ _AGE_PATTERNS = [
     rx.compile(r"(?<=\()()(\d{1,3})(?=\s*(?:वर्ष|साल|yrs?|years?)\s*\))"),
     rx.compile(r"(?<![\d.:/\-x×])()(\d{1,3})(?=\s*(?:वर्ष|साल)\s*(?:की|का|के)\b)"),
     # Age: 47 [Yrs]   Age/Sex: 46 Yrs/M   आयु: 39 वर्ष
-    rx.compile(r"(?i)((?:\bage(?:\s*/\s*sex)?|आयु|उम्र|umar|\bumr)\s*[:\-=]?\s*)(\d{1,3})(?![\d/]\d)(?!\s*(?:mg|ml|g|%|/\d))"),
+    rx.compile(r"(?i)((?:\bage(?:\s*/\s*sex)?|आयु|उम्र|वय|umar|\bumr)\s*[:\-=]?\s*)(\d{1,3})(?![\d/]\d)(?!\s*(?:mg|ml|g|%|/\d))"),
     # 48 Y / F, 46 Yrs/M, 47 yrs female, 52 वर्ष महिला
     rx.compile(r"(?i)(?<![\d.:/\-x×])()(\d{1,3})(?=\s*" + _AGE_UNIT + r"\s*[/,|\-]?\s*(?:m|f|male|female|man|woman|पुरुष|महिला)\b)"),
     # 65/F  58 / M   (age_sex style)
