@@ -409,14 +409,18 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
     for m in _GEO.finditer(v):
         add(m.start(), m.end(), "ID", "NUMBER", 2)
     for m in _RUN.finditer(v):
-        digits = re.sub(r"\D", "", m.group(0))
-        groups = re.findall(r"\d+", m.group(0))
-        if not _valid_run(m.group(0), digits, groups, v[max(0, m.start() - 16):m.start()]):
+        g = m.group(0)
+        gap = re.search(r" {2,}", g)                  # two blanks = a column gap in a fixed-width table, not part of one number
+        if gap:
+            g = g[:gap.start()]
+        digits = re.sub(r"\D", "", g)
+        groups = re.findall(r"\d+", g)
+        if not g or not _valid_run(g, digits, groups, v[max(0, m.start() - 16):m.start()]):
             continue
-        if len(digits) >= 10 or (len(digits) >= 8 and m.group(0).lstrip().startswith("+")):
-            if _DATEISH.match(m.group(0).strip()):
+        if len(digits) >= 10 or (len(digits) >= 8 and g.lstrip().startswith("+")):
+            if _DATEISH.match(g.strip()):
                 continue
-            s, e = m.start(), m.end()
+            s, e = m.start(), m.start() + len(g)
             while s < e and v[s] == " ":
                 s += 1
             add(s, e, "ID", "NUMBER", 2)
