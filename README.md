@@ -83,7 +83,7 @@ not copied anywhere. The input folder is never modified.
 
 ## Measured results (practice set, `tools/scorecard.py`)
 
-| | practice | mutated, unseen names / headers / formats | + hard (labels, date formats) |
+| | practice | in-house mutated proxy (not independent data): new names / headers / formats | + hard (labels, date formats) |
 |---|---:|---:|---:|
 | personal data still visible | 0.0 % (0 / 3,230) | 0.0 - 0.1 % (1) | 0.0 % |
 | canaries found | 0 / 4 | 0 / 4 | 0 / 4 |
@@ -164,3 +164,9 @@ re-validates FHIR after every change.
 `main.py` entry point · `raksha/` package · `config/policy.yaml` privacy rules · `tests/` unit tests · `tools/` dev-only:
 `scorecard.py`, `mutate.py`, `attacker_sim.py`, `linkdebug.py`, `check_intervals.py`, `token_loss.py` · `SCORES.md` experiment log ·
 `brief/` the 2-page brief.
+
+### Generalisation check (independent data)
+Names that occur only in free text, with no cue and no structured copy, were tested on a separate planted set (60 notes, 160 name
+tokens, including names that are also ordinary Hindi words such as Das, Sona, Diya). Before the adjacent-collision and repeated-name
+rules 10 of 160 tokens leaked; after, 1 of 160 (a lone first name that is also a Hindi word). Bengali, Gujarati and Gurmukhi scripts
+are outside the documented scope and are not detected.

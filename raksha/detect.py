@@ -657,7 +657,7 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
     # doctors stay: protect "Dr. X Y" so neither cues nor the lexicon remove them
     prot = _doctor_spans(text)
     spans = [sp for sp in spans if not (sp.kind == "NAME" and any(sp.start < pe and sp.end > ps for ps, pe in prot))]
-    return merge_names(text, _resolve(spans))
+    return _repeat_names(text, merge_names(text, _resolve(spans)))
 
 
 def _doctor_spans(text: str) -> list[tuple[int, int]]:
@@ -699,8 +699,52 @@ def _resolve(spans: list[Span]) -> list[Span]:
     return taken
 
 
+_COLLIDE = _tc(r"(?<![\w\p{M}])(?:Das|Sona|Diya|Dev|Raj|Nath|Rani|Ganga|Gulab|Hari|Moti|Prem|Neel)(?![\w\p{M}])")
+
+
+def _extend_collisions(text: str, spans: list[Span]) -> list[Span]:
+    """"Rohit Das", "Sona Ghosh": a capitalised word that is also an ordinary Hindi word (das = ten, sona = sleep, diya = gave) is a
+    name when it sits right next to a detected name, so the detector must not stop in front of it."""
+    out = []
+    for sp in spans:
+        if sp.kind == "NAME":
+            m = _COLLIDE.match(text, sp.end + 1) if text[sp.end:sp.end + 1] == " " else None
+            if m:
+                sp = Span(sp.start, m.end(), sp.kind, sp.role, sp.prio)
+            if sp.start >= 2 and text[sp.start - 1] == " ":
+                for k in range(max(0, sp.start - 8), sp.start - 1):
+                    m = _COLLIDE.match(text, k)
+                    if m and m.end() == sp.start - 1:
+                        sp = Span(m.start(), sp.end, sp.kind, sp.role, sp.prio)
+                        break
+        out.append(sp)
+    return sorted(out, key=lambda x: (x.start, x.end))
+
+
+def _repeat_names(text: str, spans: list[Span]) -> list[Span]:
+    """A name found once in a text (by any cue) is the same person wherever else it appears in that text: "Called Rohit Das ...
+    Rohit Das will visit". Exact, case-sensitive repeats of a Title-case name of 4+ letters are added as spans."""
+    seen = {text[sp.start:sp.end] for sp in spans if sp.kind == "NAME" and sp.end - sp.start >= 4 and text[sp.start:sp.start + 1].isupper()}
+    if not seen:
+        return spans
+    add_, taken = [], [(sp.start, sp.end) for sp in spans]
+    for nm in seen:
+        if any(lex.known_nonname(t.strip(".'’-")) and t.strip(".'’-") not in ("Das", "Sona", "Diya") for t in nm.split()):
+            continue
+        pos = text.find(nm)
+        while pos != -1:
+            e = pos + len(nm)
+            ok = (pos == 0 or not text[pos - 1].isalnum()) and (e >= len(text) or not text[e].isalnum())
+            if ok and not any(a < e and pos < b for a, b in taken):
+                add_.append(Span(pos, e, "NAME", "patient", 6))
+                taken.append((pos, e))
+            pos = text.find(nm, e)
+    return sorted(spans + add_, key=lambda x: (x.start, x.end)) if add_ else spans
+
+
 def merge_names(text: str, spans: list[Span]) -> list[Span]:
     """Adjacent NAME spans separated only by blanks/dots become one phrase ("Mohd." + "Shahid")."""
+    spans = _extend_collisions(text, spans)
     out: list[Span] = []
     for s in spans:
         if out and s.kind == "NAME" and out[-1].kind == "NAME" and re.fullmatch(r"[ \t.]{1,3}", text[out[-1].end:s.start]):

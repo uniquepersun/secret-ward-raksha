@@ -3,7 +3,7 @@
 Columns: leak% = personal data still visible (check_dev), canaries found of 4, medical% = preserve values kept, link = pairwise
 precision / recall / F0.5 (wrong merges), reid = simulated share of patients re-identified (raw = 0.98), secs = wall time.
 
-| # | experiment | practice | mutated (unseen) | notes |
+| # | experiment | practice | mutated (in-house proxy) | notes |
 |---|---|---|---|---|
 | 0 | starter baseline (organisers' regex skeleton) | leak 84.1, canaries 4, medical 100, link 0 | n/a | ~8/100 officially |
 | 1 | v0 ingestion + detection + linking | leak 0.7, canaries 0, medical 96.1, link P0.12/R0.43 (1 wrong merge) | n/a | one cluster of 19 patients: `Patient Name` header matched `pati` (husband), village column typed as NAME, FHIR SNOMED codes treated as hospital ids |
