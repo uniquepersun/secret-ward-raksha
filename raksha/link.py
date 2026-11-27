@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 from rapidfuzz.distance import JaroWinkler
 
-from .translit import skeleton
+from .translit import deva_to_latin, has_deva, skeleton
 
 
 @dataclass
@@ -34,12 +34,20 @@ class Ev:
         return bool(self.ids or self.strong or self.names)
 
 
+def _fem(t: str) -> bool:
+    lat = (deva_to_latin(t) if has_deva(t) else t).lower().strip(".'-")
+    return len(lat) >= 4 and lat.endswith("a")
+
+
 def name_set(tokens) -> frozenset:
-    sk = [skeleton(t) for t in tokens]
+    """Skeleton keys. A final "a" is kept as a "#" marker: Manish / Manisha, Ankit / Ankita, Arun / Aruna share a skeleton but
+    are usually brother and sister (matching ignores the marker; merging two records does not)."""
+    sk = [(skeleton(t) + ("#" if _fem(t) else "")) if skeleton(t) else "" for t in tokens]
     return frozenset(s for s in sk if s)
 
 
 def _tok_match(a: str, b: str) -> bool:
+    a, b = a.rstrip("#"), b.rstrip("#")
     if a == b:
         return True
     if len(a) >= 3 and len(b) >= 3:
@@ -60,6 +68,20 @@ def match_count(A: frozenset, B: frozenset) -> int:
 
 def strict_eq(A, B) -> bool:
     return len(A) >= 2 and len(B) >= 2 and match_count(A, B) >= min(len(A), len(B)) and match_count(A, B) >= 2
+
+
+def partial_exact(A, B) -> bool:
+    """partial(), but a feminine-ending marker on one side only (Manish vs Manisha) is a mismatch."""
+    if not partial(A, B):
+        return False
+    used, n = set(), 0
+    for a in sorted(A):
+        for b in sorted(B):
+            if b not in used and a.endswith("#") == b.endswith("#") and _tok_match(a, b):
+                used.add(b)
+                n += 1
+                break
+    return n >= min(len(A), len(B))
 
 
 def partial(A, B) -> bool:
@@ -99,7 +121,7 @@ class Linker:
             if t in ("AADHAAR", "ABHA", "PAN") and len(A["strong"][t] | B["strong"][t]) > 1:
                 return True
         if need_name and A["names"] and B["names"]:
-            if not any(partial(x, y) for x in A["names"] for y in B["names"]):
+            if not any(partial_exact(x, y) for x in A["names"] for y in B["names"]):
                 return True
         return False
 
