@@ -120,6 +120,10 @@ class Linker:
         for t in set(A["strong"]) & set(B["strong"]):
             if t in ("AADHAAR", "ABHA", "PAN") and len(A["strong"][t] | B["strong"][t]) > 1:
                 return True
+        if need_name:                                 # a record naming only someone's relative (baby of X) is not X
+            for P, Q in ((A, B), (B, A)):
+                if not P["names"] and P["rels"] and Q["names"] and any(partial_exact(r, n) for r in P["rels"] for n in Q["names"]):
+                    return True
         if need_name and A["names"] and B["names"]:
             if not any(partial_exact(x, y) for x in A["names"] for y in B["names"]):
                 return True

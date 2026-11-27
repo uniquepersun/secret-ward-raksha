@@ -739,9 +739,10 @@ class Pipeline:
         for role, vs in namebuf.items():
             # one name per name-role cell group (first/last columns are merged by the caller order)
             for v in vs:
-                ns = name_set(re.split(r"[\s.]+", v))
+                ns = name_set(re.split(r"[\s.]+", re.sub(r"(?i)^\s*(?:b\s*/\s*o|baby\s+of|bo\b)\.?", "", v)))
+                kin = role == "RELNAME" or bool(re.match(r"(?i)^\s*(?:b\s*/\s*o|baby\s+of|bo\b)", v))   # "B/O Sunita Sharma" names the mother
                 if ns:
-                    (ev.rels if role == "RELNAME" else ev.names).append(ns)
+                    (ev.rels if kin else ev.names).append(ns)
         return ev
 
     def _ev_from_text(self, ev: Ev, text: str, skip_names: bool):
