@@ -39,3 +39,5 @@ compromise that stays informative.
 
 Reliability: 3 runs with the same secret are byte-identical; a different secret shares 0 of 59 pseudonyms and changes
 every sanitized file; input folder hash unchanged; 4.5 s / 41 MB on practice, 46.7 s / 149 MB on 10x (2,000 files).
+
+| 16 | final rounds: nested/dict/lab/FHIR record units, headerless CSV, feminine-ending and baby-of merge guards, linear key renaming | practice leak 0.0, medical 99.2 %, link P 1.00 / R 0.98 / F0.5 1.00, targeted 0.07 | mutated: leak 0.0-0.1, medical 99.2 %, F0.5 0.96-0.98 | independent family set (320 patients): precision 1.000, 0 false merges (was 0.859, 252) |

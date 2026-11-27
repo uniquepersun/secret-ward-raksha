@@ -591,7 +591,7 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
                     hit = lx.name_skels[sk]
         if hit and not _is_doctor_context(text, m.start()):
             add(m.start(), end, "NAME", hit, 6)
-            if deva and ti + 1 < len(toks_all) and toks_all[ti + 1].group(0) in _DEV_SURNAMES and text[end:toks_all[ti + 1].start()].strip() == "":
+            if deva and ti + 1 < len(toks_all) and (toks_all[ti + 1].group(0) in _DEV_SURNAMES or (skeleton(toks_all[ti + 1].group(0)) in (lx.name_skels.keys() | lx.generic_skels | lx.short_skels.keys()) and toks_all[ti + 1].group(0) not in DEV_COMMON)) and text[end:toks_all[ti + 1].start()].strip() == "":
                 add(toks_all[ti + 1].start(), toks_all[ti + 1].end(), "NAME", hit, 6)
     # letter-spaced words ("K i s h o r i l a l"): collapse, then test as a name token or two
     if loose:

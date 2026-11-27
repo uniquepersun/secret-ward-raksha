@@ -87,8 +87,8 @@ not copied anywhere. The input folder is never modified.
 |---|---:|---:|---:|
 | personal data still visible | 0.0 % (0 / 3,230) | 0.0 - 0.1 % (1) | 0.0 % |
 | canaries found | 0 / 4 | 0 / 4 | 0 / 4 |
-| medical values kept | 100.0 % | 100.0 % | 100.0 % |
-| linking precision / recall / F0.5 | 1.00 / 0.91 / 0.99 | 1.00 / 0.79 / 0.95 (2) | 1.00 / 0.84 / 0.96 |
+| medical values kept | 99.2 % (4,816 / 4,855) | 99.2 % | not re-measured after the last round |
+| linking precision / recall / F0.5 | 1.00 / 0.98 / 1.00 | 1.00 / about 0.85 / 0.96 - 0.98 (2) | not re-measured after the last round |
 | wrongly merged patients | 0 | 0 | 0 |
 
 (1) the 0.1 % is two registration rows where one patient's *shifted* date coincides with a different patient's DOB string in the same file;
