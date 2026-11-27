@@ -94,7 +94,7 @@ _DW_HI = r"(?:शून्य|एक|दो|तीन|चार|पांच|प
 _DW_RO = r"(?:shunya|sifar|ek|do|teen|char|chaar|paanch|panch|chhe|chheh|chhah|saat|aath|nau)"
 _DIGIT_WORDS = _tc(rf"(?i)(?<![\w\p{{M}}])(?:{_DW_EN}(?:[ ,\-]+{_DW_EN}){{9,13}}|{_DW_HI}(?:[ ,\-]+{_DW_HI}){{9,13}}|{_DW_RO}(?:[ ,\-]+{_DW_RO}){{9,13}})(?![\w\p{{M}}])")
 _SPACED = _tc(r"(?<![\w])(?:\p{L}[ .\-_]){4,}\p{L}(?![\w])")
-_CUE_THEN_WORD = _tc(r"(?i:\b(?:said|says|told|informed|named|called|neighbou?r|friend|brother|sister|uncle|aunt|cousin|nephew|niece|colleague|boss|landlord|driver|maid|son|daughter|wife|husband|mother|father|(?:son|daughter|brother|sister|mother|father)-in-law)\s+)(\p{Lu}\p{Ll}{3,})(?![\p{L}\p{M}])")
+_CUE_THEN_WORD = _tc(r"(?i:\b(?:said|says|told|informed|named|called|neighbou?r|friend|brother|sister|uncle|aunt|cousin|nephew|niece|colleague|boss|landlord|driver|maid|son|daughter|wife|husband|mother|father|bhai|behen|bhabhi|chacha|chachi|mama|mami|devar|saas|sasur|nanad|(?:son|daughter|brother|sister|mother|father)-in-law)\s+)(\p{Lu}\p{Ll}{3,})(?![\p{L}\p{M}])")
 _UUID = _tc(r"(?i)(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])")
 _URL = _tc(r"(?i)\b(?:https?://|www\.)[^\s\"'<>)\]]+|(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])")  # URLs and UUIDs are never PII
 _DATEISH = _tc(r"^\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4}$")
@@ -136,7 +136,7 @@ _BARE_PIN = _tc(r"(?<![\d.])[1-9]\d{5}(?![\d.]|\s*(?:mg|ml|g|kg|iu|%))")
 _STRONG_LABEL = _tc(rf"(?i)(?<![\w])(?:patient(?:['’]s)?[\s_]*name|pt\.?[\s_]*name|name[\s_]*of[\s_]*(?:the[\s_]*)?patient|"
                            rf"full[\s_]*name|first[\s_]*name|last[\s_]*name|name|naam|नाम|मरीज\s*का\s*नाम|रोगी\s*का\s*नाम|रुग्णाचे\s*(?:नाव|नांव)|पेशंटचे\s*नाव|नाव|नांव|रुग्णाचे\s*(?:नाव|नांव)|पेशंटचे\s*नाव|नाव|नांव|"
                            rf"पूरा\s*नाम|nom)\s*[:\-=]\s*({SEQ_STRONG})")
-_WEAK_LABEL = _tc(rf"(?i)(?<![\w])(?:patient|pt\.?|note\s*for|report\s*(?:for|of)|record\s*(?:for|of)|letter\s*(?:for|of)|"
+_WEAK_LABEL = _tc(rf"(?i)(?<![\w])(?:patient|pt\.?|mareez|mariz|note\s*for|report\s*(?:for|of)|record\s*(?:for|of)|letter\s*(?:for|of)|"
                          rf"referral\s*for|certificate\s*(?:for|of)|consent\s*(?:of|for)|admitted\s*:|"
                          rf"mr\.?|mrs\.?|ms\.?|miss|mx|smt\.?|shri|shree|sri|km\.?|kumari|master|baby|late|"
                          rf"श्रीमती|श्री|कुमारी|सुश्री|मास्टर|मरीज|रोगी|पेशेंट|स्व\.?)[\s:.\-]+({SEQ_TITLE})")
@@ -157,8 +157,8 @@ _RELATION_LOW = _tc(rf"(?i)(?<![\w])(?:s\s*/\s*o|d\s*/\s*o|w\s*/\s*o)\b\.?[\s:\-
 _SUFFIX = _tc(rf"(?<![\w])({SEQ_TITLE})\s+(?:(?i:ji|sahab|saheb|sahib|bhai|bhaiya|bhaiyya|didi|behen|behan|behenji|behnji|"
                      rf"madam|mataji|bhabhi|chacha|chachi|mausi|amma|appa|anna|akka|dada|dadi|nani|nana)|जी|साहब|साहेब|भाई|भैया|दीदी|बहन|"
                      rf"बहनजी|मैडम|माता|भाभी|चाचा|चाची|मौसी|ताई|अम्मा)(?![\w\p{{M}}])")
-_ROLE_AFTER = _tc(rf"(?<![\w])({SEQ_TITLE})\s*[,(]\s*(?:\(?\s*)?(?i:attendant|relative|visitor|caller|guardian|father|mother|"
-                         rf"wife|husband|brother|sister|son|daughter|friend|neighbou?r|patient|pt)\b")
+_ROLE_AFTER = _tc(rf"(?<![\w])({SEQ_TITLE})\s*[,(]\s*(?:\(?\s*)?(?i:(?:his\s+|her\s+)?(?:attendant|relative|visitor|caller|guardian|father|mother|"
+                         rf"wife|husband|brother|sister|son|daughter|friend|neighbou?r|patient|pt|(?:son|daughter|brother|sister)-in-law))\b")
 _NAME_PHONE = _tc(rf"(?<![\w])({SEQ_TITLE})\s*[,:\-(]?\s*(?:(?i:mob(?:ile)?|ph(?:one)?|tel|contact|cell|call|no\.?)\s*[:.\-]?\s*)?"
                          rf"\+?\(?\d{{3,5}}")
 _WA_SENDER = _tc(rf"(?m)^\[[^\]\n]{{4,30}}\]\s*({SEQ_STRONG}):")

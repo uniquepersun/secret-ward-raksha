@@ -25,7 +25,7 @@ HDR_NONPERSON = _H(r"hospital|facility|lab|test|drug|medic|ward|dept|department|
                    r"author|ref.?doc|\bdr\b|औषधि|दवा|अस्पताल")
 HDR_DOCTOR = _H(r"doctor|consultant|physician|practitioner|referr?ed.?by|ref.?doctor|author|\bdr\b|surgeon|डॉक्टर")
 HDR_ENC = _H(r"trip|sample|\bbill|invoice|visit|claim|ticket|order|receipt|serial|batch|encounter|appointment|token|\bticket\b")
-HDR_PATID = _H(r"uhid|mrn|patient|\bpt\b|hosp(?:ital)?.?id|reg(?:istration)?.?no|पंजीकरण|यूएचआईडी|आईडी|आयडी")
+HDR_PATID = _H(r"uhid|mrn|patient|\bpt\b|hosp(?:ital)?.?id|reg(?:istration)?.?no|पंजीकरण|यूएचआईडी|आईडी|आयडी|reg.?code|patient.?code|hosp.?code")
 HDR_MEASURE = _H(r"amount|\bamt\b|price|cost|fee|total|charge|\binr\b|\brs\b|qty|quantity|count|value|result|score|weight|height|dose|duration|\bdays?\b|temp|pulse|bmi|sugar|rate|balance|paid|due|discount|tax")
 HDR_CODE = _H(r"package|procedure|code|coding|loinc|snomed|icd|cpt|system|schema|version|\bunit\b|range")
 HDR_PHONE = _H(r"phone|mobile|mob\b|cell|contact|tel|callback|whatsapp|फोन|मोबाइल|मोबाईल|संपर्क|दूरभाष")
@@ -33,7 +33,7 @@ HDR_AADHAAR = _H(r"aadhaar|aadhar|adhar|uid\b|आधार")
 HDR_ABHA = _H(r"abha|health.?id|healthid|ndhm|abdm")
 HDR_PAN = _H(r"\bpan\b|pan.?no|pan.?card")
 HDR_EMAIL = _H(r"e.?mail|mail.?id")
-HDR_HID = _H(r"uhid|mrn|\bmr.?no|ipd|opd.?no|reg.?no|registration|patient.?(?:id|ref)|hosp(?:ital)?.?id|\bid\b|"
+HDR_HID = _H(r"reg.?code|patient.?code|hosp.?code|uhid|mrn|\bmr.?no|ipd|opd.?no|reg.?no|registration|patient.?(?:id|ref)|hosp(?:ital)?.?id|\bid\b|"
              r"ref(?:erence)?\b|admission.?no|adm.?no|case.?no|file.?no|record.?no|पंजीकरण|यूएचआईडी|क्रमांक")
 HDR_INSID = _H(r"pmjay|policy|insurance|claim|payer.?id|card.?no|beneficiary|scheme.?id")
 HDR_DOB = _H(r"dob|birth|janm|जन्म|d\.o\.b")
@@ -121,9 +121,9 @@ def infer_role(header: str, values: list, known_names=None) -> str:
         return "DOB" if HDR_DOB.search(h) else "DATE"
     if HDR_DOB.search(h) and _share(dv, lambda v: bool(_DATE_V.match(v)) or bool(re.match(r"^\d{4}$", v))) >= 0.4:
         return "DOB"
-    if HDR_INSID.search(h) and _share(dv, lambda v: bool(_ID_V.match(v))) >= 0.4:
+    if HDR_INSID.search(h) and not (HDR_MEASURE.search(h) and not HDR_PATID.search(h)) and _share(dv, lambda v: bool(_ID_V.match(v))) >= 0.4:
         return "INSID"
-    if _share(dv, lambda v: (bool(_ID_V.match(v)) and len(v) >= 6) or (bool(HDR_PATID.search(h)) and bool(re.match(r"^[A-Za-z]{1,6}\d*[-/_]\d+$", v)))) >= 0.7:
+    if _share(dv, lambda v: (bool(_ID_V.match(v)) and len(v) >= 6) or (bool(HDR_PATID.search(h)) and bool(re.match(r"^[A-Za-z]{1,6}(?:\d*[-/_]\d+|\d{2,})$", v)))) >= 0.7:
         if HDR_CODE.search(h) and not HDR_HID.search(h):
             return "KEEP"
         if HDR_MEASURE.search(h) and not HDR_PATID.search(h) and not HDR_HID.search(h.replace("id", "", 1) if False else ""):
