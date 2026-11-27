@@ -54,7 +54,7 @@ _PAN_V = re.compile(r"^[A-Z]{5}\d{4}[A-Z]$")
 _EMAIL_V = re.compile(r"^[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+$")
 _ID_V = re.compile(r"^(?=.*\d)(?:[A-Za-z]{1,6}[\-/ ]?)?(?:[A-Za-z0-9]{1,8}[\-/])*\d{3,}[A-Za-z0-9]*$")
 _PIN_V = re.compile(r"^[1-9]\d{5}$")
-_DATE_V = re.compile(r"^\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4}(?:[T ].*)?$")
+_DATE_V = re.compile(r"(?i)^(?:\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4}(?:[T ].*)?|\d{1,2}(?:st|nd|rd|th)?[ \-/.]*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?[ \-/,.]*['’]?\d{2,4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?[ \-/]*\d{1,2}(?:st|nd|rd|th)?,?[ \-/]*\d{4})$")
 _AGE_V = re.compile(r"^\d{1,3}\s*(?:years?|yrs?\.?|y|वर्ष|साल)?$", re.I)
 _AGESEX_V = re.compile(r"^\d{1,3}\s*/\s*[MFmf]$|^\d{1,3}\s*(?:y|yrs?)?\s*/\s*[MFmf]$", re.I)
 _SEX_VALS = {"m", "f", "male", "female", "other", "o", "t", "पुरुष", "महिला", "स्त्री", "पु", "म", "man", "woman", "boy", "girl"}

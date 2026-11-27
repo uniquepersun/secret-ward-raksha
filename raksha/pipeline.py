@@ -168,6 +168,9 @@ def pointer_escape(k: str) -> str:
 
 
 # ------------------------------------------------------------------------------------- pipeline
+_CONTAINER_KEYS = frozenset("data patients patient records record results result items item entries rows row payload response visits visit encounters encounter cases case persons person".split())
+
+
 class Pipeline:
     def __init__(self, inp: Path, out: Path, secret: bytes, policy: dict):
         self.inp, self.out, self.policy = inp, out, policy
@@ -322,9 +325,19 @@ class Pipeline:
         if isinstance(data, list) and data and all(isinstance(x, dict) for x in data):
             d.units = [Unit(f"/{i}", node=x) for i, x in enumerate(data)]
         elif isinstance(data, dict) and data.get("resourceType") != "Bundle":
-            for k, v in data.items():
-                if isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
-                    d.units += [Unit(f"/{pointer_escape(k)}/{i}", node=x, base=(k,)) for i, x in enumerate(v)]
+            level = [((), data)]                       # {"data": {"patients": [...]}}: the record list may sit a few levels down
+            for _ in range(5):
+                nxt = []
+                for path, node in level:
+                    for k, v in node.items():
+                        if isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
+                            pp = path + (k,)
+                            d.units += [Unit("/" + "/".join(pointer_escape(x) for x in pp) + f"/{i}", node=x, base=pp) for i, x in enumerate(v)]
+                        elif isinstance(v, dict):
+                            nxt.append((path + (k,), v))
+                if d.units or not nxt:
+                    break
+                level = nxt
         if not d.units:
             d.units = [Unit("doc", node=data)]
 
@@ -345,7 +358,7 @@ class Pipeline:
         elif node is not None and not isinstance(node, bool):
             yield parts, (parts[-1] if parts else ""), node
 
-    def learn_json_roles(self):
+    def learn_json_roles(self):  # container words ("data.patients.enc.dx") must not make every leaf look like a name column
         vals = defaultdict(list)
         for d in self.docs:
             if d.kind != "json" or d.status != "sanitized":
@@ -354,7 +367,7 @@ class Pipeline:
                 vals[sig_join(parts)].append(v)
         known = {s for s in self.lx.name_skels}
         for sig, vs in vals.items():
-            self.json_roles[sig] = infer_role(sig, vs, known or None)
+            self.json_roles[sig] = infer_role(" ".join(t for t in sig.split(" ") if t.lower() not in _CONTAINER_KEYS) or sig, vs, known or None)
 
     # =========================================================================== place columns
     ADDR_SIBLINGS = {"PIN", "ADDRESS", "ADDRESSH", "TEHSIL", "DISTRICT"}
