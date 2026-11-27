@@ -9,6 +9,8 @@ Offline, CPU only, no LLM, **no trained model at all**: deterministic rules, voc
 Dependencies: `regex`, `rapidfuzz`, `charset-normalizer` (all pinned in `requirements.txt`); everything else is the
 standard library. Peak memory ~40 MB and ~4.5 s on the practice set; ~47 s and 150 MB on 10x the data.
 
+**Team AAA:** Abhay Tomar, Asmitha M, Anubhav kumari.
+
 **Documents:** [2-page Project Brief (PDF)](docs/brief.pdf) · [project page](docs/index.html) · [experiment log](SCORES.md) · [data sources](DATA_SOURCES.md) · [licence](LICENSE)
 
 ## Setup and run
