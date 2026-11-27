@@ -49,7 +49,8 @@ def pseudonym(key: str) -> str:
 _ISO = rx.compile(r"(?<![\d])(\d{4})-(\d{2})-(\d{2})(?:([T ])(\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(Z|[+-]\d{2}:?\d{2})?)?(?![\d])")
 _NUM = rx.compile(r"(?<![\d.])(\d{1,2})([/.\-])(\d{1,2})\2(\d{4}|\d{2})(?![\d])")
 _YMD_SLASH = rx.compile(r"(?<![\d])(\d{4})([/.])(\d{1,2})\2(\d{1,2})(?![\d])")
-_WRITTEN = rx.compile(r"(?i)(?<![\d\w])(\d{1,2})(?:st|nd|rd|th)?[\s\-]+(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?,?(?:[\s\-]+['\u2019]?|['\u2019])(\d{4}|\d{2})(?![\d])")
+_WRITTEN = rx.compile(r"(?i)(?<![\d\w])(\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?[\s\-]*(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?,?(?:[\s\-]*['\u2019]?|['\u2019])(\d{4}|\d{2})(?![\d])")
+_COMPACT = rx.compile(r"(?<![\d.\-])((?:19|20)\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?![\d])")
 _NUM_MY = rx.compile(r"(?<![\d/.\-])(0?[1-9]|1[0-2])/(20\d{2}|19\d{2})(?![\d/])")
 _MONTH_YEAR = rx.compile(r"(?i)(?<![\d\w])(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?,?(?:\s+|\s*[-'\u2019]\s*)(\d{4})(?![\d])")
 _WRITTEN2 = rx.compile(r"(?i)(?<![\w])(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})(?![\d])")
@@ -57,7 +58,7 @@ _WRITTEN2 = rx.compile(r"(?i)(?<![\w])(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct
 
 HI_MONTHS = {"जनवरी": 1, "फरवरी": 2, "फ़रवरी": 2, "मार्च": 3, "अप्रैल": 4, "अप्रेल": 4, "मई": 5, "जून": 6, "जुलाई": 7, "अगस्त": 8,
              "सितंबर": 9, "सितम्बर": 9, "अक्टूबर": 10, "अक्तूबर": 10, "नवंबर": 11, "नवम्बर": 11, "दिसंबर": 12, "दिसम्बर": 12}
-_HINDI = rx.compile(r"(?<![\d\w])(\d{1,2})\s+(" + "|".join(sorted(map(rx.escape, HI_MONTHS), key=len, reverse=True)) + r")\s+(\d{4})(?![\d])")
+_HINDI = rx.compile(r"(?<![\d\w])(\d{1,2})\s+(" + "|".join(sorted(map(rx.escape, HI_MONTHS), key=len, reverse=True)) + r")\s+(\d{4}|\d{2})(?![\d])")
 
 
 def _safe(y, m, d):
@@ -150,6 +151,14 @@ def shift_text_dates(text: str, days: int, order: str = "dmy") -> tuple[str, int
             continue
         n = d + dt.timedelta(days=days)
         add(m, f"{mon_names[n.month - 1]} {n.year}")
+    for m in _COMPACT.finditer(t):                # 20260315
+        if any(a <= m.start() < b or a < m.end() <= b for a, b in day_edits):
+            continue
+        d = _safe(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        if d is None:
+            continue
+        n = d + dt.timedelta(days=days)
+        add(m, f"{n.year:04d}{n.month:02d}{n.day:02d}")
     for m in _NUM_MY.finditer(t):                # "03/2026": month and year only
         if any(a <= m.start() < b or a < m.end() <= b for a, b in day_edits):
             continue
@@ -160,7 +169,9 @@ def shift_text_dates(text: str, days: int, order: str = "dmy") -> tuple[str, int
         add(m, f"{n.month:02d}/{n.year}")
     inv = {v: k for k, v in reversed(list(HI_MONTHS.items()))}
     for m in _HINDI.finditer(t):
-        d = _safe(int(m.group(3)), HI_MONTHS[m.group(2)], int(m.group(1)))
+        hy = int(m.group(3))
+        hy = hy if len(m.group(3)) == 4 else (2000 + hy if hy < 70 else 1900 + hy)
+        d = _safe(hy, HI_MONTHS[m.group(2)], int(m.group(1)))
         if d is None:
             continue
         n = d + dt.timedelta(days=days)
@@ -214,6 +225,8 @@ def band(age: int) -> str:
 
 _AGE_UNIT = r"(?:years?|yrs?\.?|y\b|वर्ष|साल|baras)"
 _AGE_PATTERNS = [
+    rx.compile(r"(?i)((?<![\w])(?:umra|aged)\s*[:\-=]?\s*)(\d{1,3})(?![\d/])(?!\s*(?:mg|ml|g|%|/\d))"),
+    rx.compile(r"(?i)(?<![\d.:/\-x×])()(\d{1,3})(?=\s*(?:y/o|yo\b|yrs?\.?\s+old|years?\s+old|वर्षीय))"),
     rx.compile(r"(?<=\()()(\d{1,3})(?=\s*(?:वर्ष|साल|yrs?|years?)\s*\))"),
     rx.compile(r"(?<![\d.:/\-x×])()(\d{1,3})(?=\s*(?:वर्ष|साल)\s*(?:की|का|के)\b)"),
     # Age: 47 [Yrs]   Age/Sex: 46 Yrs/M   आयु: 39 वर्ष

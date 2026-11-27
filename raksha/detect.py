@@ -165,6 +165,7 @@ _DOCTOR_BEFORE = _tc(r"(?i)(?:\bdr|\bdoctor|डॉ|डा|डॉक्टर|\bp
 _DOCTOR_PHRASE = _tc(rf"(?i)(?<![\w])(?:dr|doctor|डॉ|डा|डॉक्टर|prof)\.?\s*({SEQ_STRONG})")
 _HINDI_PARTICLE = _tc(rf"(?<![\w\p{{M}}])([\u0900-\u097F\p{{M}}]+(?:\s+[\u0900-\u097F\p{{M}}]+){{0,2}})\s+(?:को|का|की|के|ने)\s")
 
+_CLINICAL_WORDS = frozenset("started given monitor monitoring seen transfused transfuse possible inform informed continue continued advised review reviewed suspected known refer referred discharge discharged admitted admit plan follow check repeat stopped stop stable ordered send sent noted denies reports presented presents examination exam".split())
 _TOKEN = _tc(rf"{TOK}")
 
 
@@ -603,9 +604,13 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
         run, runs = [], []
         for tm in _TOKEN.finditer(m.group(1)):
             t = tm.group(0).strip(".'’-")
-            ok = len(t) >= 3 and not lex.known_nonname(t) and not has_deva(t)
+            ok = len(t) >= 3 and not lex.known_nonname(t) and not has_deva(t) and not (len(t) >= 2 and t.isupper()) \
+                and t.casefold() not in _CLINICAL_WORDS
             if ok:
                 run.append((seq_start + tm.start(), seq_start + tm.end(), t))
+                if tm.group(0).endswith(".") and len(tm.group(0)) > 3:       # a sentence ends here: "Started Ferrous Sulphate. Transfused"
+                    runs.append(run)
+                    run = []
             else:
                 if run:
                     runs.append(run)

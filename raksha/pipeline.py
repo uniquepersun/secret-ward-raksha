@@ -341,6 +341,20 @@ class Pipeline:
                 if d.units or not nxt:
                     break
                 level = nxt
+            if not d.units:                            # a dict of records keyed by id or name: {"patient_1": {...}, "patient_2": {...}}
+                level = [((), data)]
+                for _ in range(5):
+                    nxt = []
+                    for path, node in level:
+                        vals = [(k, v) for k, v in node.items() if isinstance(v, dict)]
+                        if len(vals) >= 2 and len(vals) == len(node):
+                            d.units += [Unit("/" + "/".join(pointer_escape(x) for x in path + (k,)), node=v, base=path) for k, v in vals]
+                            d.keyed_names = [k for k, _ in vals if " " in k.strip() and is_namey(k)]
+                        else:
+                            nxt.extend((path + (k,), v) for k, v in vals)
+                    if d.units or not nxt:
+                        break
+                    level = nxt
         if not d.units:
             d.units = [Unit("doc", node=data)]
 
@@ -366,7 +380,11 @@ class Pipeline:
         for d in self.docs:
             if d.kind != "json" or d.status != "sanitized":
                 continue
-            for parts, key, v in self._iter_json(d.data):
+            if len(d.units) > 1 or (d.units and d.units[0].loc != "doc"):
+                its = (x for u in d.units for x in self._iter_json(u.node, u.base))
+            else:
+                its = self._iter_json(d.data)
+            for parts, key, v in its:
                 vals[sig_join(parts)].append(v)
         known = {s for s in self.lx.name_skels}
         for sig, vs in vals.items():
@@ -425,6 +443,9 @@ class Pipeline:
                 if d.kind == "csv" and d.status == "sanitized":
                     self._infer_places_csv(d)
                     self._learn_table(d)
+            for d in self.docs:
+                for k in getattr(d, "keyed_names", ()):
+                    self.lx.add_name(k)
             self.learn_json_roles()
             self._infer_places_json()
             for d in self.docs:
