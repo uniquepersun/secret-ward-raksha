@@ -55,6 +55,7 @@ class DocState:
     kind: str = ""              # csv | json | text
     text: str = ""
     delim: str = ","
+    synth_header: bool = False
     nl: str = "\n"
     header: list = field(default_factory=list)
     rows: list = field(default_factory=list)
@@ -157,6 +158,20 @@ def phone10(v: str) -> str | None:
         if d[0] in "6789":
             return d
     return None
+
+
+def _looks_like_data_row(cells) -> bool:
+    """Two or more cells shaped like phones, ids, dates, PINs or Aadhaar numbers: real header cells are labels, not values."""
+    from .columns import _AADH_V, _DATE_V, _PHONE_V, _PIN_V
+    n = 0
+    for c in cells:
+        c = ascii_digits(c.strip())
+        if c and (_PHONE_V.match(c) or _AADH_V.match(c) or _DATE_V.match(c) or _PIN_V.match(c) or re.fullmatch(r"[A-Za-z]{1,6}[\-/]?\d{3,}[\w\-/]*", c)):
+            n += 1
+    return n >= 2
+
+
+_FHIR_CODE_KEYS = frozenset("use system code gender status type language rank mode intent kind".split())
 
 
 def sig_join(parts) -> str:
@@ -299,6 +314,8 @@ class Pipeline:
                 d.status, d.reason = "quarantined", "empty_file"
                 return
             d.header, d.rows = rows[0], rows[1:]
+            if _looks_like_data_row(rows[0]):         # headerless export: row 0 is a record, not column labels
+                d.header, d.rows, d.synth_header = [f"col{i + 1}" for i in range(len(rows[0]))], rows, True
             d.units = [Unit(f"row:{i}", node=i) for i in range(len(d.rows))]
             return
         d.kind = "text"
@@ -327,7 +344,7 @@ class Pipeline:
         d.units = []
         if isinstance(data, list) and data and all(isinstance(x, dict) for x in data):
             d.units = [Unit(f"/{i}", node=x) for i, x in enumerate(data)]
-        elif isinstance(data, dict) and data.get("resourceType") != "Bundle" and not any(
+        elif isinstance(data, dict) and data.get("resourceType") is None and not any(
                 re.fullmatch(r"(?:patient|patient_?name|name|uhid|mrn|patient_?id)", str(k), re.I) and not isinstance(v, list) for k, v in data.items()):
             level = [((), data)]       # a top-level patient object means the whole document belongs to one patient (lab report with panels)                       # {"data": {"patients": [...]}}: the record list may sit a few levels down
             for _ in range(5):
@@ -1112,7 +1129,8 @@ class Pipeline:
         buf = io.StringIO()
         w = csv.writer(buf, delimiter=d.delim, lineterminator=d.nl)
         head_ctx = Ctx(order=d.order or self.global_order)
-        w.writerow([security.neutralise_cell(self.scrub_header(h, d)) for h in d.header])
+        if not d.synth_header:
+            w.writerow([security.neutralise_cell(self.scrub_header(h, d)) for h in d.header])
         for u in d.units:
             if self.over_budget():                     # one huge file must not outlive the run's time budget
                 raise SpanTimeout
@@ -1217,6 +1235,9 @@ class Pipeline:
             return node
         if parts and str(parts[-1]).split("<")[0] == "resourceType":
             return node                                  # structural: a FHIR resource type is never PII
+        if parts and any(str(x).startswith("<") for x in parts) and str(parts[-1]).lower() in _FHIR_CODE_KEYS \
+                and isinstance(node, str) and len(node) <= 40 and " " not in node:
+            return node                                  # structural FHIR code (name.use, telecom.system, gender, coding.code): never PII
         role = self.json_roles.get(sig_join(parts), "KEEP")
         if isinstance(node, (int, float)):
             digs = re.sub(r"\D", "", str(int(node))) if isinstance(node, int) or float(node).is_integer() else ""
