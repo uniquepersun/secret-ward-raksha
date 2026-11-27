@@ -72,6 +72,9 @@ def main() -> int:
         sys.stderr.write("warning: RAKSHA_SECRET is not set; using a random key (output is not reproducible)\n")
     policy = load_policy(Path(a.policy))
     inp, out = Path(a.input), Path(a.output)
+    if not inp.is_dir():
+        sys.stderr.write("fatal: input is not a directory\n")
+        return 2
     out.mkdir(parents=True, exist_ok=True)
     sys.setrecursionlimit(3000)
 

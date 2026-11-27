@@ -116,11 +116,18 @@ _LONG_NONSPACE = re.compile(r"\S{300,}")
 _LONG_SPACE = re.compile(r"[ \t\r\n\f\v]{100,}")
 
 
+def _break_run(m) -> str:
+    """A 300+ character run is filler or a delimiter-packed record ("PHI|xxx|Mob:98..|Name|"). Turn separators into spaces and
+    cut long alphanumeric stretches into 80-character words, so every identifier inside is still scanned but no token is long
+    enough to make a backtracking regex quadratic. Same length, so offsets are unchanged."""
+    run = re.sub(r"[|;,^~&\\/]", " ", m.group(0))
+    return re.sub(r"[^\s]{80}", lambda k: k.group(0)[:-1] + " ", run)
+
+
 def mask_bombs(text: str) -> str:
-    """Same-length masking of runs that real documents never contain: 300+ non-space characters (no word or identifier is
-    that long) and 100+ whitespace characters. Cue-word-plus-whitespace floods are what make backtracking regexes
-    quadratic; once masked they cannot be built. Offsets are unchanged, so spans still map onto the original text."""
+    """Same-length rewriting of runs that real documents never contain: 300+ non-space characters (split, see _break_run) and
+    100+ whitespace characters (masked; cue-word-plus-whitespace floods are what make regexes quadratic)."""
     if len(text) < 100:
         return text
-    text = _LONG_NONSPACE.sub(lambda m: "\x00" * len(m.group(0)), text)
+    text = _LONG_NONSPACE.sub(_break_run, text)
     return _LONG_SPACE.sub(lambda m: "\x00" * len(m.group(0)), text)

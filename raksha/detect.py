@@ -75,6 +75,9 @@ _RUN = _tc(r"(?<![\d])\+?\(?\d(?:\)?[ \-.]{0,2}\d){5,}(?![\d])")
 _MASKED = _tc(r"(?<![\w])(?:[Xx*•#]{2,4}[\s\-]?){2}\d{4}(?!\d)|(?<![\w])[Xx*•]{4}[\s-]?[Xx*•]{4}[\s-]?[Xx*•\d]{4}")
 _EMAIL_OBF = _tc(r"(?i)\b[\w.+\-]{1,}\s*(?:\[at\]|\(at\)|\{at\}|\sat\s)\s*[\w\-]{2,}\s*(?:\[dot\]|\(dot\)|\{dot\}|\sdot\s)\s*[a-z]{2,}\b")
 _EMAIL = _tc(r"(?<![\w.+\-])[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+|(?<![\w])[\w.\-]{3,}@(?:abdm|sbx|ndhm|abha)\b", rx.I)
+_IPV4 = _tc(r"(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?![\d]|\.\d)")
+_HANDLE = _tc(r"(?<![\w@.])@[A-Za-z][\w.]{2,29}(?![\w@])")
+_GEO = _tc(r"(?<![\d.])-?\d{1,3}\.\d{4,}\s*[,/;]\s*-?\d{1,3}\.\d{4,}(?![\d])")
 _PAN = _tc(r"(?<![A-Za-z0-9])[A-Z]{5}\d{4}[A-Z](?![A-Za-z0-9])")
 _ALNUM_ID = _tc(r"(?<![\w/\-])(?=[A-Za-z0-9/\-]*\d)[A-Za-z]{2,6}(?:[\-/][A-Za-z0-9]{1,10}){1,4}(?![\w])|"
                        r"(?<![\w])[A-Za-z]{2,5}\d{4,}[A-Za-z0-9]*(?![\w])")
@@ -90,7 +93,7 @@ _DW_HI = r"(?:शून्य|एक|दो|तीन|चार|पांच|प
 _DW_RO = r"(?:shunya|sifar|ek|do|teen|char|chaar|paanch|panch|chhe|chheh|chhah|saat|aath|nau)"
 _DIGIT_WORDS = _tc(rf"(?i)(?<![\w\p{{M}}])(?:{_DW_EN}(?:[ ,\-]+{_DW_EN}){{9,13}}|{_DW_HI}(?:[ ,\-]+{_DW_HI}){{9,13}}|{_DW_RO}(?:[ ,\-]+{_DW_RO}){{9,13}})(?![\w\p{{M}}])")
 _SPACED = _tc(r"(?<![\w])(?:\p{L}[ .\-_]){4,}\p{L}(?![\w])")
-_CUE_THEN_WORD = _tc(r"(?i:\b(?:said|says|told|informed|named|called|neighbou?r|friend|brother|sister|uncle|aunt|cousin|nephew|niece|colleague|boss|landlord|driver|maid)\s+)(\p{Lu}\p{Ll}{3,})(?![\p{L}\p{M}])")
+_CUE_THEN_WORD = _tc(r"(?i:\b(?:said|says|told|informed|named|called|neighbou?r|friend|brother|sister|uncle|aunt|cousin|nephew|niece|colleague|boss|landlord|driver|maid|son|daughter|wife|husband|mother|father|(?:son|daughter|brother|sister|mother|father)-in-law)\s+)(\p{Lu}\p{Ll}{3,})(?![\p{L}\p{M}])")
 _UUID = _tc(r"(?i)(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])")
 _URL = _tc(r"(?i)\b(?:https?://|www\.)[^\s\"'<>)\]]+|(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])")  # URLs and UUIDs are never PII
 _DATEISH = _tc(r"^\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4}$")
@@ -118,6 +121,7 @@ _DEV_AFTER_REL = _tc(rf"(?<![\w\p{{M}}])(?:{_DEV_REL})\s*[-:–]?\s*({_DEVSEQ})"
 _DEV_BEFORE_REL = _tc(rf"(?<![\w\p{{M}}])({_DEVSEQ})\s+(?:की|का|के)\s+(?:{_DEV_REL})(?![\w\p{{M}}])")
 _DEV_PT = _tc(rf"(?<![\w\p{{M}}])(?:रोगी|मरीज़?|पेशेंट|अटेंडेंट|परिजन|देखभालकर्ता)\s*(?:का\s*नाम)?\s*[:\-–]\s*({_DEVSEQ})")
 _ORG_CUE = _tc(rf"(?i)(?<![\w])(?:employer|company|workplace|works?\s+(?:at|for)|employed\s+(?:at|by)|studies\s+at|studying\s+at|college|school|university)\s*[:\-]?\s*({SEQ_TITLE})")
+_ADDR_END = _tc(r"(?i)\.\s+\p{Lu}|;|(?<![\w])(?:was|is|were|with|admitted|who|presented|came|has|had|complains|reports|since)(?![\w])")
 _ADDR_LABEL = _tc(r"(?i)(?<![\w\p{M}])(?:address|resident\s+of|residing\s+at|resides\s+at|r/o|पता|निवास|पते)\s*(?:\([^)\n]{0,30}\))?\s*[:\-–]?\s*([^\n]{3,160})")
 _KEEP_SEG = _tc(r"(?i)^\s*(?:tehsil|tahsil|distt?\.?|district|dist\.?|zila|जिला|तहसील)\b|\[")
 _DEV_SURNAMES = frozenset("यादव शर्मा वर्मा गुप्ता सिंह कुमार मिश्रा पांडे पाण्डेय तिवारी चौहान पटेल खान अंसारी सिद्दीकी राजपूत निषाद पासवान कुशवाहा मौर्य ठाकुर जैन अग्रवाल श्रीवास्तव दुबे शुक्ला त्रिपाठी बानो खातून देवी कौर बेगम".split())
@@ -389,6 +393,12 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
         add(m.start(), m.end(), "ID", "AADHAAR_MASKED", 1)
     for m in _PAN.finditer(v):
         add(m.start(), m.end(), "ID", "PAN", 1)
+    for m in _IPV4.finditer(v):
+        add(m.start(), m.end(), "ID", "NUMBER", 2)
+    for m in _HANDLE.finditer(v):
+        add(m.start(), m.end(), "ID", "EMAIL", 2)
+    for m in _GEO.finditer(v):
+        add(m.start(), m.end(), "ID", "NUMBER", 2)
     for m in _RUN.finditer(v):
         digits = re.sub(r"\D", "", m.group(0))
         groups = re.findall(r"\d+", m.group(0))
@@ -445,6 +455,11 @@ def _find_spans(text: str, lx: Lexicon, hint: str = "", loose: bool = True) -> l
     def addr_segments(value: str, base: int):
         off = 0
         for seg in value.split(","):
+            cut = _ADDR_END.search(seg)                # "resident of Nashik, was admitted ...": the address ends at the clause
+            if cut:
+                seg = seg[:cut.start()]
+                if not seg.strip():
+                    break
             t = seg.strip(" \t-–")
             if len(t) >= 3 and not _KEEP_SEG.search(seg) and t.casefold() not in lx.places and any(c.isalnum() for c in t):
                 a = base + off + (len(seg) - len(seg.lstrip()))
