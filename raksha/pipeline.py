@@ -258,6 +258,9 @@ class Pipeline:
         if text is None:
             d.status, d.reason = "quarantined", "undecodable_text"
             return
+        if text and sum(c == "\ufffd" or (ord(c) < 32 and c not in "\r\n\t") or 0x80 <= ord(c) < 0xa0 for c in text[:20000]) > 0.1 * len(text[:20000]):
+            d.status, d.reason = "quarantined", "unsupported_format"      # random bytes behind a .csv / .txt name
+            return
         text = clean(text)
         if text.lstrip().startswith(("<?xml", "<!DOCTYPE", "<html", "<ClinicalDocument")):
             d.status, d.reason = "quarantined", "unsupported_format"
@@ -770,6 +773,7 @@ class Pipeline:
             blob = json.dumps(u.node, ensure_ascii=False)
         else:
             blob = d.text
+        blob = security.mask_bombs(blob)            # whitespace / long-token floods make these plain-re scans quadratic
         found = set()
         for m in self._DX_TEXT.finditer(blob):
             found.add(m.group(2))
@@ -1086,7 +1090,7 @@ class Pipeline:
         buf = io.StringIO()
         w = csv.writer(buf, delimiter=d.delim, lineterminator=d.nl)
         head_ctx = Ctx(order=d.order or self.global_order)
-        w.writerow([self.scrub_header(h, d) for h in d.header])
+        w.writerow([security.neutralise_cell(self.scrub_header(h, d)) for h in d.header])
         for u in d.units:
             if self.over_budget():                     # one huge file must not outlive the run's time budget
                 raise SpanTimeout
@@ -1310,6 +1314,9 @@ class Pipeline:
 
     def write_all(self):
         san = self.out / "sanitized"
+        if san.is_dir() and not san.is_symlink():      # a previous run's files must not linger unreported
+            import shutil
+            shutil.rmtree(san, ignore_errors=True)
         san.mkdir(parents=True, exist_ok=True)
         taken: set = set()
         for d in self.docs:
