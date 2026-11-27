@@ -327,8 +327,9 @@ class Pipeline:
         d.units = []
         if isinstance(data, list) and data and all(isinstance(x, dict) for x in data):
             d.units = [Unit(f"/{i}", node=x) for i, x in enumerate(data)]
-        elif isinstance(data, dict) and data.get("resourceType") != "Bundle":
-            level = [((), data)]                       # {"data": {"patients": [...]}}: the record list may sit a few levels down
+        elif isinstance(data, dict) and data.get("resourceType") != "Bundle" and not any(
+                re.fullmatch(r"(?:patient|patient_?name|name|uhid|mrn|patient_?id)", str(k), re.I) and not isinstance(v, list) for k, v in data.items()):
+            level = [((), data)]       # a top-level patient object means the whole document belongs to one patient (lab report with panels)                       # {"data": {"patients": [...]}}: the record list may sit a few levels down
             for _ in range(5):
                 nxt = []
                 for path, node in level:
@@ -603,7 +604,7 @@ class Pipeline:
     def _plausible(ev: Ev) -> Ev:
         """One record = one patient. A record listing many patients (an index, a ward sheet, a roster) must not
         bridge their clusters, so evidence that no single patient could own is dropped for linking."""
-        if len(ev.ids) >= 4:
+        if len(ev.ids) >= 3:                         # a record naming 3+ hospital ids is a roster, not one patient
             ev.ids, ev.cores = set(), set()
         by_type = Counter(t for t, _ in ev.strong)
         for typ in ("AADHAAR", "ABHA", "PAN"):

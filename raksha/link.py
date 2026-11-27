@@ -130,9 +130,9 @@ class Linker:
             for k in e.strong:
                 by[("strong",) + tuple(k)].append(i)
         # E1: strong identifiers (full hospital id, Aadhaar, ABHA, PAN, e-mail)
-        for _, members in sorted(by.items(), key=lambda kv: str(kv[0])):
-            for m in members[1:]:
-                self.union(members[0], m, need_name=False)
+        for key, members in sorted(by.items(), key=lambda kv: str(kv[0])):
+            for m in members[1:]:                      # a shared e-mail is often a family mailbox: it needs a compatible name
+                self.union(members[0], m, need_name=(len(key) > 1 and key[1] == "EMAIL"))
         # E5: digit cores (filename / path fragments) need compatible names
         core = defaultdict(list)
         for i, e in enumerate(evs):
