@@ -841,10 +841,9 @@ class Pipeline:
             if key == first and names:               # no id: one person's rows share a shift through their name
                 skey = "nm:" + "|".join(sorted(max(names, key=len)))
             skels = frozenset(s for nm in names for s in nm if s not in self.lx.generic_skels) or frozenset(s for nm in names for s in nm)
-            # records that carry a phone / id fragment but no patient identity still get their dates shifted
-            weak = any(evs[i].phones or evs[i].cores for i in idx)
+            # a record with no identity at all still gets its dates shifted (one shift per unit), never left raw
             self.cl_info[r] = {"key": key, "ident": ident, "psn": privacy.pseudonym(key) if ident else None,
-                               "shift": privacy.shift_days(skey, self.age_max, self.age_min) if (ident or weak) else None,
+                               "shift": privacy.shift_days(skey, self.age_max, self.age_min),
                                "skels": skels, "ids": frozenset(ids), "cores": frozenset(cores), "n": len(idx), "names": tuple(set(names))}
             codes = set()
             for i in idx:
