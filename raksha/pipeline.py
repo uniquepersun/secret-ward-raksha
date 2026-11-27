@@ -311,7 +311,7 @@ class Pipeline:
             if not counts or max(counts) < 2:
                 continue
             mode = max(set(counts), key=counts.count)
-            sc = counts.count(mode) / len(counts) + 0.01 * mode - (0.2 if dl != default else 0)
+            sc = counts.count(mode) / len(counts) + 0.05 * min(mode, 10) - (0.05 if dl != default else 0)
             if sc > score:
                 best, score = dl, sc
         return best

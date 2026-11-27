@@ -18,17 +18,17 @@ _H = lambda p: re.compile(p, re.I | re.U)  # noqa: E731
 HDR_RELNAME = _H(r"pitaji|patni|\bbiwi\b|\bmaa\b|\bbete?\b|\bbeti\b|sampark|sambandhi|saathi|related.?person|caller|raised.?by|witness|visitor|informant|reporter|requester|called.?by|signed.?by|bystander|emergency.?contact|relative|guardian|father|mother|spouse|husband|wife|\bpita\b|\bpati\b|attendant|next.?of.?kin|\bnok\b|"
                  r"care.?of|\bc/?o\b|कर्ता|अभिभावक|पिता|पति|संबंधी|रिश्ते")
 HDR_NAME = _H(r"(?:^|[\s_\-.:/])(name|naam|nm|patient|pt|full|first|last|given|family|surname|local|middle|caller|"
-              r"contact.?person|informant|नाम|मरीज|रोगी)(?:$|[\s_\-.:/'’s])")
+              r"contact.?person|informant|नाम|नाव|नांव|नावं|मरीज|रोगी|पेशंट|पेशेंट|रुग्ण)(?:$|[\s_\-.:/'’s])")
 HDR_NONPERSON = _H(r"hospital|facility|lab|test|drug|medic|ward|dept|department|diagnos|display|title|system|file|"
                    r"form|panel|package|procedure|payer|insurer|company|city.?name|organisation|organization|"
                    r"clinic|source|unit|category|type|schema|status|consultant|doctor|physician|referr?ed|practitioner|"
                    r"author|ref.?doc|\bdr\b|औषधि|दवा|अस्पताल")
 HDR_DOCTOR = _H(r"doctor|consultant|physician|practitioner|referr?ed.?by|ref.?doctor|author|\bdr\b|surgeon|डॉक्टर")
 HDR_ENC = _H(r"trip|sample|\bbill|invoice|visit|claim|ticket|order|receipt|serial|batch|encounter|appointment|token|\bticket\b")
-HDR_PATID = _H(r"uhid|mrn|patient|\bpt\b|hosp(?:ital)?.?id|reg(?:istration)?.?no|पंजीकरण|यूएचआईडी")
+HDR_PATID = _H(r"uhid|mrn|patient|\bpt\b|hosp(?:ital)?.?id|reg(?:istration)?.?no|पंजीकरण|यूएचआईडी|आईडी|आयडी")
 HDR_MEASURE = _H(r"amount|\bamt\b|price|cost|fee|total|charge|\binr\b|\brs\b|qty|quantity|count|value|result|score|weight|height|dose|duration|\bdays?\b|temp|pulse|bmi|sugar|rate|balance|paid|due|discount|tax")
 HDR_CODE = _H(r"package|procedure|code|coding|loinc|snomed|icd|cpt|system|schema|version|\bunit\b|range")
-HDR_PHONE = _H(r"phone|mobile|mob\b|cell|contact|tel|callback|whatsapp|फोन|मोबाइल|संपर्क|दूरभाष")
+HDR_PHONE = _H(r"phone|mobile|mob\b|cell|contact|tel|callback|whatsapp|फोन|मोबाइल|मोबाईल|संपर्क|दूरभाष")
 HDR_AADHAAR = _H(r"aadhaar|aadhar|adhar|uid\b|आधार")
 HDR_ABHA = _H(r"abha|health.?id|healthid|ndhm|abdm")
 HDR_PAN = _H(r"\bpan\b|pan.?no|pan.?card")
@@ -40,7 +40,7 @@ HDR_DOB = _H(r"dob|birth|janm|जन्म|d\.o\.b")
 HDR_DATE = _H(r"date|dt\b|tithi|tarikh|तारीख|तिथि|दिनांक|admitted|discharged|collected|reported|timestamp|generated|_on$|_at$|\bon\b")
 HDR_AGE = _H(r"\bage\b|umar|umr|aayu|ayu|आयु|उम्र|years?\b|\byrs?\b")
 HDR_SEX = _H(r"\bsex\b|gender|ling\b|लिंग|जेंडर")
-HDR_VILLAGE = _H(r"village|vill\b|gram|gaon|gaanv|mohalla|locality|area|colony|hamlet|ग्राम|गाँव|गांव|मोहल्ला|city$|town")
+HDR_VILLAGE = _H(r"village|vill\b|gram|gaon|gaanv|mohalla|locality|area|colony|hamlet|ग्राम|गाँव|गांव|गाव|मोहल्ला|वस्ती|city$|town")
 HDR_TEHSIL = _H(r"tehsil|tahsil|taluk|block|तहसील")
 HDR_DISTRICT = _H(r"district|distt|jila|zila|जिला|state|राज्य")
 HDR_PIN = _H(r"\bpin\b|pin.?code|pincode|zip|postal|पिन")
@@ -123,7 +123,7 @@ def infer_role(header: str, values: list, known_names=None) -> str:
         return "DOB"
     if HDR_INSID.search(h) and _share(dv, lambda v: bool(_ID_V.match(v))) >= 0.4:
         return "INSID"
-    if _share(dv, lambda v: bool(_ID_V.match(v)) and len(v) >= 6) >= 0.7:
+    if _share(dv, lambda v: (bool(_ID_V.match(v)) and len(v) >= 6) or (bool(HDR_PATID.search(h)) and bool(re.match(r"^[A-Za-z]{1,6}\d*[-/_]\d+$", v)))) >= 0.7:
         if HDR_CODE.search(h) and not HDR_HID.search(h):
             return "KEEP"
         if HDR_MEASURE.search(h) and not HDR_PATID.search(h) and not HDR_HID.search(h.replace("id", "", 1) if False else ""):
