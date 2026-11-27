@@ -87,7 +87,7 @@ def _share(vals, pred) -> float:
 def infer_role(header: str, values: list, known_names=None) -> str:
     """Return a role for one column / key path. `values` may hold non-strings (JSON)."""
     h = norm_header(header)
-    sv = [str(v).strip() for v in values if v is not None and str(v).strip() != ""]
+    sv = [str(v).strip()[:256] for v in values if v is not None and str(v).strip() != ""]   # no id or name is longer; caps regex cost
     if not sv:
         return "KEEP"
     sv = sv[:400]

@@ -139,7 +139,7 @@ re-validates FHIR after every change.
 
 ## Reliability guards (found by fuzzing, all covered by `tests/test_robustness.py`)
 
-* Detectors run in linear time: non-space runs over 300 characters are masked, very large texts are scanned in chunks, and two
+* Detectors are designed to run in near-linear time and are bounded by per-call timeouts: non-space runs over 300 characters are masked, very large texts are scanned in chunks, and two
   quadratic regexes were fixed. A 5 MB single-line file takes about 50 s instead of never finishing.
 * Every stage is guarded per file: an odd file is quarantined with a reason code, never a crash. A hard time budget (`time_budget_s`,
   default 540 s) quarantines whatever is left, so the run always ends with exit 0, a valid contract and an honest report.
